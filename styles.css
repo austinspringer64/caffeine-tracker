@@ -2,7 +2,7 @@
 
 body {
     font-family: Arial, sans-serif;
-    background-color: #666666;
+    background-color: #e24c4c;
     margin: 0;
     padding: 0;
 }
@@ -11,7 +11,7 @@ body {
     max-width: 800px;
     margin: 30px auto;
     padding: 20px;
-    background: #eeecec;
+    background: #d9d7d7;
     border-radius: 12px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
