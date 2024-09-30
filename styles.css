@@ -1,0 +1,171 @@
+/* styles.css */
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #666666;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 30px auto;
+    padding: 20px;
+    background: #eeecec;
+    border-radius: 12px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+}
+
+label {
+    margin-top: 10px;
+    margin-bottom: 5px;
+    color: #555;
+}
+
+input {
+    padding: 8px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover {
+    background-color: #218838;
+}
+
+canvas {
+    margin-top: 30px;
+}
+
+#entries-list {
+    list-style-type: none;
+    padding: 0;
+    border: 1px solid red;
+    min-height: 50px;
+}
+
+#entries-list li {
+    cursor: pointer;
+    padding: 5px;
+    margin: 5px 0;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+}
+
+#entries-list li:hover {
+    background-color: #e0e0e0;
+}
+
+#edit-form {
+    margin-top: 20px;
+    border-top: 1px solid #ccc;
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+#edit-form button {
+    margin-top: 10px;
+}
+
+#cancel-edit {
+    background-color: #dc3545;
+    margin-left: 10px;
+}
+
+#cancel-edit:hover {
+    background-color: #c82333;
+}
+
+#clear-entries {
+    display: block; /* Ensures the button is on its own line */
+    width: 100%; /* Makes the button full width */
+    background-color: #dc3545;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-top: 20px;
+    margin-bottom: 20px; /* Adds some space below the button */
+    border: 1px solid blue;
+}
+
+#clear-entries:hover {
+    background-color: #c82333;
+}
+
+#caffeine-chart {
+    width: 100%;
+    height: 300px;
+    border: 1px solid #ccc;
+}
+
+#delete-entry {
+    background-color: #dc3545;
+    color: white;
+    margin-top: 10px;
+    display: block; /* Ensure it's on its own line */
+    width: 100%; /* Make it full width like other buttons */
+}
+
+#delete-entry:hover {
+    background-color: #c82333;
+}
+
+#delete-entry:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+.warning {
+    background-color: #ffcccc;
+    color: #cc0000;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #cc0000;
+    border-radius: 4px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.limit-setting {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#caffeine-limit {
+    width: 80px;
+}
+
+#save-limit {
+    padding: 5px 10px;
+    margin-top: 0;
+}
