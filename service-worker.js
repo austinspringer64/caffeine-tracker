@@ -1,14 +1,12 @@
 const CACHE_NAME = 'caffeine-tracker-cache-v1';
 const urlsToCache = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/app.js',
-    '/chart.js',
-    '/manifest.json',
-    '/icon-192x192.png',
-    '/icon-512x512.png'
-    // Add paths to icons if needed
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './manifest.json',
+    './offline.html',
+    'https://cdn.jsdelivr.net/npm/chart.js'  // Add CDN resource
 ];
 
 // Install Event
@@ -17,7 +15,12 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log('Opened cache');
-                return cache.addAll(urlsToCache);
+                return cache.addAll(urlsToCache)
+                    .catch(error => {
+                        console.error('Cache addAll error:', error);
+                        // Continue with partial cache if some resources fail
+                        return;
+                    });
             })
     );
 });
@@ -30,21 +33,36 @@ self.addEventListener('fetch', (event) => {
                 if (response) {
                     return response;
                 }
-                return fetch(event.request).then(
-                    (response) => {
-                        if(!response || response.status !== 200 || response.type !== 'basic') {
+                return fetch(event.request)
+                    .then((response) => {
+                        // Check if we received a valid response
+                        if (!response || response.status !== 200) {
                             return response;
                         }
-                        var responseToCache = response.clone();
+
+                        // Don't cache CDN resources or external requests
+                        if (!response.url.startsWith(self.location.origin)) {
+                            return response;
+                        }
+
+                        const responseToCache = response.clone();
                         caches.open(CACHE_NAME)
                             .then((cache) => {
                                 cache.put(event.request, responseToCache);
+                            })
+                            .catch(error => {
+                                console.error('Cache put error:', error);
                             });
+
                         return response;
-                    }
-                ).catch(() => {
-                    return caches.match('/offline.html');
-                });
+                    })
+                    .catch(() => {
+                        // Return offline page for navigation requests
+                        if (event.request.mode === 'navigate') {
+                            return caches.match('./offline.html');
+                        }
+                        return new Response('Offline content not available');
+                    });
             })
     );
 });
@@ -53,15 +71,19 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('activate', (event) => {
     const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (!cacheWhitelist.includes(cacheName)) {
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
+        caches.keys()
+            .then((cacheNames) => {
+                return Promise.all(
+                    cacheNames.map((cacheName) => {
+                        if (!cacheWhitelist.includes(cacheName)) {
+                            return caches.delete(cacheName);
+                        }
+                    })
+                );
+            })
+            .catch(error => {
+                console.error('Cache cleanup error:', error);
+            })
     );
 });
 

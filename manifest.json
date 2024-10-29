@@ -1,20 +1,26 @@
 {
     "name": "Caffeine Tracker",
     "short_name": "CafTrack",
-    "start_url": "/",
+    "description": "Track your daily caffeine intake and monitor consumption levels",
+    "start_url": "./",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#000000",
+    "orientation": "portrait",
+    "background_color": "#e24c4c",
+    "theme_color": "#e24c4c",
     "icons": [
         {
-            "src": "/icon-192x192.png",
+            "src": "./icon-192x192.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
-            "src": "/icon-512x512.png",
+            "src": "./icon-512x512.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         }
-    ]
+    ],
+    "categories": ["health", "lifestyle"],
+    "lang": "en-US"
 }
