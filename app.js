@@ -1,146 +1,304 @@
-// app.js
+// Constants and Configuration
+const CONFIG = {
+    CAFFEINE: {
+        HALF_LIFE: 5,
+        MIN_LIMIT: 1,
+        MAX_LIMIT: 1000,
+        NEGLIGIBLE: 1,
+        DEFAULT_LIMIT: 250
+    },
+    CHART: {
+        COLORS: {
+            PRIMARY: '#4CAF50',
+            WARNING: '#ff5252',
+            BACKGROUND: 'rgba(76, 175, 80, 0.1)'
+        }
+    }
+};
 
-// Wait for the DOM to be fully loaded before running the script
-document.addEventListener('DOMContentLoaded', function() {
-    // Constants
-    const CAFFEINE_HALF_LIFE = 5; // in hours
-    const MIN_CAFFEINE_LIMIT = 1;
-    const MAX_CAFFEINE_LIMIT = 1000;
-    const NEGLIGIBLE_CAFFEINE = 1; // Stop plotting when level drops below 1mg
-    let currentChart = null; // Track chart instance for proper cleanup
+// Storage Utility
+class StorageManager {
+    static set(key, value) {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+            return true;
+        } catch (error) {
+            console.error(`Storage error (${key}):`, error);
+            return false;
+        }
+    }
 
-    // Elements
-    const form = document.getElementById('caffeine-form');
-    const timeInput = document.getElementById('time');
-    const amountInput = document.getElementById('amount');
-    const chartCtx = document.getElementById('caffeine-chart').getContext('2d');
-    const entriesListElement = document.getElementById('entries-list');
-    const editFormElement = document.getElementById('edit-form');
-    const editTimeInput = document.getElementById('edit-time');
-    const editAmountInput = document.getElementById('edit-amount');
-    const editIndexInput = document.getElementById('edit-index');
-    const clearEntriesButton = document.getElementById('clear-entries');
-    const deleteEntryButton = document.getElementById('delete-entry');
-    const caffeineWarning = document.getElementById('caffeine-warning');
-    const warningTimeElement = document.getElementById('warning-time');
-    const caffeineLimitInput = document.getElementById('caffeine-limit');
-    const saveLimitButton = document.getElementById('save-limit');
+    static get(key, defaultValue) {
+        try {
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : defaultValue;
+        } catch (error) {
+            console.error(`Storage error (${key}):`, error);
+            return defaultValue;
+        }
+    }
+}
 
-    // Load personal limit with validation
-    let personalCaffeineLimit;
-    try {
+// Caffeine Entry Manager
+class CaffeineManager {
+    constructor() {
+        this.entries = StorageManager.get('caffeineEntries', []);
+        this.personalLimit = this.loadPersonalLimit();
+    }
+
+    loadPersonalLimit() {
         const storedLimit = parseInt(localStorage.getItem('personalCaffeineLimit'));
-        personalCaffeineLimit = storedLimit && !isNaN(storedLimit) && 
-            storedLimit >= MIN_CAFFEINE_LIMIT && storedLimit <= MAX_CAFFEINE_LIMIT
-            ? storedLimit : 250;
-    } catch (error) {
-        console.error('Error loading caffeine limit:', error);
-        personalCaffeineLimit = 250;
-    }
-    caffeineLimitInput.value = personalCaffeineLimit;
-
-    // Function to safely interact with localStorage
-    const safeStorage = {
-        set: (key, value) => {
-            try {
-                localStorage.setItem(key, JSON.stringify(value));
-                return true;
-            } catch (error) {
-                console.error(`Error saving to localStorage (${key}):`, error);
-                return false;
-            }
-        },
-        get: (key, defaultValue) => {
-            try {
-                const item = localStorage.getItem(key);
-                return item ? JSON.parse(item) : defaultValue;
-            } catch (error) {
-                console.error(`Error reading from localStorage (${key}):`, error);
-                return defaultValue;
-            }
-        }
-    };
-
-    // Function to save the personal limit with validation
-    function savePersonalLimit() {
-        const newLimit = parseInt(caffeineLimitInput.value);
-        if (!isNaN(newLimit) && newLimit >= MIN_CAFFEINE_LIMIT && newLimit <= MAX_CAFFEINE_LIMIT) {
-            personalCaffeineLimit = newLimit;
-            safeStorage.set('personalCaffeineLimit', newLimit);
-            alert(`Personal caffeine limit set to ${newLimit}mg`);
-            updateChart();
-        } else {
-            alert(`Please enter a valid number between ${MIN_CAFFEINE_LIMIT} and ${MAX_CAFFEINE_LIMIT}`);
-            caffeineLimitInput.value = personalCaffeineLimit; // Reset to previous valid value
-        }
+        return storedLimit && !isNaN(storedLimit) && 
+            storedLimit >= CONFIG.CAFFEINE.MIN_LIMIT && 
+            storedLimit <= CONFIG.CAFFEINE.MAX_LIMIT
+            ? storedLimit : CONFIG.CAFFEINE.DEFAULT_LIMIT;
     }
 
-    saveLimitButton.addEventListener('click', savePersonalLimit);
+    addEntry(time, amount) {
+        const entryTime = new Date();
+        const [hours, minutes] = time.split(':').map(Number);
+        entryTime.setHours(hours, minutes, 0, 0);
 
-    // Data Storage
-    let caffeineEntries = safeStorage.get('caffeineEntries', []);
-
-    // Function to calculate caffeine level with timezone handling
-    function calculateCaffeineLevel(entryTime, entryAmount, targetTime) {
-        const timeDiff = (targetTime - entryTime) / (1000 * 60 * 60); // in hours
-        if (timeDiff < 0) return 0;
-        return entryAmount * Math.pow(0.5, timeDiff / CAFFEINE_HALF_LIFE);
+        this.entries.push({
+            time: entryTime.toISOString(),
+            amount: amount
+        });
+        this.save();
     }
 
-    // Function to update the chart with proper cleanup
-    function updateChart() {
-        if (currentChart) {
-            currentChart.destroy(); // Cleanup old chart instance
-        }
+    updateEntry(index, time, amount) {
+        const entryTime = new Date();
+        const [hours, minutes] = time.split(':').map(Number);
+        entryTime.setHours(hours, minutes, 0, 0);
 
-        if (caffeineEntries.length === 0) {
-            currentChart = new Chart(chartCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Caffeine Level (mg)',
-                        data: [],
-                        borderColor: '#4CAF50',
-                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                        fill: true
-                    }]
-                }
-            });
+        this.entries[index] = {
+            time: entryTime.toISOString(),
+            amount: amount
+        };
+        this.save();
+    }
+
+    deleteEntry(index) {
+        this.entries.splice(index, 1);
+        this.save();
+    }
+
+    clearEntries() {
+        this.entries = [];
+        this.save();
+    }
+
+    updatePersonalLimit(newLimit) {
+        if (!isNaN(newLimit) && 
+            newLimit >= CONFIG.CAFFEINE.MIN_LIMIT && 
+            newLimit <= CONFIG.CAFFEINE.MAX_LIMIT) {
+            this.personalLimit = newLimit;
+            StorageManager.set('personalCaffeineLimit', newLimit);
+            return true;
+        }
+        return false;
+    }
+
+    save() {
+        StorageManager.set('caffeineEntries', this.entries);
+    }
+
+    calculateCaffeineLevel(entryTime, entryAmount, targetTime) {
+        const timeDiff = (targetTime - entryTime) / (1000 * 60 * 60);
+        return timeDiff < 0 ? 0 : 
+            entryAmount * Math.pow(0.5, timeDiff / CONFIG.CAFFEINE.HALF_LIFE);
+    }
+}
+
+// UI Manager
+class UIManager {
+    constructor(caffeineManager) {
+        this.caffeineManager = caffeineManager;
+        this.currentChart = null;
+        this.initializeElements();
+        this.setupEventListeners();
+        this.updateDisplay();
+    }
+
+    initializeElements() {
+        this.elements = {
+            form: document.getElementById('caffeine-form'),
+            timeInput: document.getElementById('time'),
+            amountInput: document.getElementById('amount'),
+            chartCtx: document.getElementById('caffeine-chart').getContext('2d'),
+            entriesList: document.getElementById('entries-list'),
+            editForm: document.getElementById('edit-form'),
+            editTimeInput: document.getElementById('edit-time'),
+            editAmountInput: document.getElementById('edit-amount'),
+            editIndexInput: document.getElementById('edit-index'),
+            clearButton: document.getElementById('clear-entries'),
+            deleteButton: document.getElementById('delete-entry'),
+            warning: document.getElementById('caffeine-warning'),
+            warningTime: document.getElementById('warning-time'),
+            limitInput: document.getElementById('caffeine-limit'),
+            saveLimitButton: document.getElementById('save-limit')
+        };
+        
+        // Set initial values
+        this.elements.limitInput.value = this.caffeineManager.personalLimit;
+        this.setCurrentTime();
+    }
+
+    setupEventListeners() {
+        this.elements.form.addEventListener('submit', (e) => this.handleNewEntry(e));
+        this.elements.editForm.addEventListener('submit', (e) => this.handleEditEntry(e));
+        this.elements.clearButton.addEventListener('click', () => this.handleClearEntries());
+        this.elements.deleteButton.addEventListener('click', () => this.handleDeleteEntry());
+        this.elements.saveLimitButton.addEventListener('click', () => this.handleLimitUpdate());
+        document.getElementById('cancel-edit').addEventListener('click', () => this.hideEditForm());
+    }
+
+    setCurrentTime() {
+        const now = new Date();
+        this.elements.timeInput.value = 
+            `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    handleNewEntry(e) {
+        e.preventDefault();
+        const time = this.elements.timeInput.value;
+        const amount = parseInt(this.elements.amountInput.value, 10);
+
+        if (!time || isNaN(amount) || amount <= 0) {
+            alert('Please enter valid time and amount.');
             return;
         }
 
-        // Sort entries by time
-        caffeineEntries.sort((a, b) => new Date(a.time) - new Date(b.time));
+        this.caffeineManager.addEntry(time, amount);
+        this.elements.form.reset();
+        this.setCurrentTime();
+        this.updateDisplay();
+    }
 
-        const firstEntryTime = new Date(caffeineEntries[0].time);
+    handleEditEntry(e) {
+        e.preventDefault();
+        const index = parseInt(this.elements.editIndexInput.value, 10);
+        const time = this.elements.editTimeInput.value;
+        const amount = parseInt(this.elements.editAmountInput.value, 10);
+
+        if (!time || isNaN(amount) || amount <= 0) {
+            alert('Please enter valid time and amount.');
+            return;
+        }
+
+        this.caffeineManager.updateEntry(index, time, amount);
+        this.hideEditForm();
+        this.updateDisplay();
+    }
+
+    handleDeleteEntry() {
+        if (confirm('Are you sure you want to delete this entry?')) {
+            const index = parseInt(this.elements.editIndexInput.value, 10);
+            this.caffeineManager.deleteEntry(index);
+            this.hideEditForm();
+            this.updateDisplay();
+        }
+    }
+
+    handleClearEntries() {
+        if (confirm('Are you sure you want to clear all entries? This action cannot be undone.')) {
+            this.caffeineManager.clearEntries();
+            this.updateDisplay();
+        }
+    }
+
+    handleLimitUpdate() {
+        const newLimit = parseInt(this.elements.limitInput.value);
+        if (this.caffeineManager.updatePersonalLimit(newLimit)) {
+            alert(`Personal caffeine limit set to ${newLimit}mg`);
+            this.updateDisplay();
+        } else {
+            alert(`Please enter a valid number between ${CONFIG.CAFFEINE.MIN_LIMIT} and ${CONFIG.CAFFEINE.MAX_LIMIT}`);
+            this.elements.limitInput.value = this.caffeineManager.personalLimit;
+        }
+    }
+
+    showEditForm(index) {
+        const entry = this.caffeineManager.entries[index];
+        const entryDate = new Date(entry.time);
+        this.elements.editTimeInput.value = 
+            `${entryDate.getHours().toString().padStart(2, '0')}:${entryDate.getMinutes().toString().padStart(2, '0')}`;
+        this.elements.editAmountInput.value = entry.amount;
+        this.elements.editIndexInput.value = index;
+        this.elements.editForm.style.display = 'block';
+        this.elements.deleteButton.disabled = false;
+    }
+
+    hideEditForm() {
+        this.elements.editForm.style.display = 'none';
+        this.elements.deleteButton.disabled = true;
+    }
+
+    updateDisplay() {
+        this.updateChart();
+        this.displayEntries();
+    }
+
+    displayEntries() {
+        this.elements.entriesList.innerHTML = '';
+        [...this.caffeineManager.entries]
+            .sort((a, b) => new Date(b.time) - new Date(a.time))
+            .forEach((entry, index) => {
+                const listItem = document.createElement('li');
+                const entryTime = new Date(entry.time);
+                listItem.textContent = `${entryTime.toLocaleTimeString([], { 
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                })} - ${entry.amount}mg`;
+                listItem.addEventListener('click', () => this.showEditForm(index));
+                this.elements.entriesList.appendChild(listItem);
+            });
+    }
+
+    updateChart() {
+        if (this.currentChart) {
+            this.currentChart.destroy();
+        }
+
+        const chartData = this.prepareChartData();
+        this.updateWarningDisplay(chartData.maxLevel, chartData.thresholdEndTime);
+        this.createChart(chartData);
+    }
+
+    prepareChartData() {
+        if (this.caffeineManager.entries.length === 0) {
+            return { timePoints: [], levels: [], maxLevel: 0 };
+        }
+
+        const sortedEntries = [...this.caffeineManager.entries]
+            .sort((a, b) => new Date(a.time) - new Date(b.time));
+
+        const firstEntryTime = new Date(sortedEntries[0].time);
         const lastEntryTime = new Date();
         lastEntryTime.setHours(23, 59, 59, 999);
 
         const timePoints = [];
-        const caffeineLevels = [];
+        const levels = [];
         let currentTime = new Date(firstEntryTime);
         currentTime.setMinutes(Math.floor(currentTime.getMinutes() / 15) * 15, 0, 0);
 
-        let maxCaffeineLevel = 0;
+        let maxLevel = 0;
         let exceedsThreshold = false;
         let thresholdEndTime = null;
         let consecutiveLowLevels = 0;
 
         while (currentTime <= lastEntryTime) {
             let totalCaffeine = 0;
-            caffeineEntries.forEach(entry => {
+            sortedEntries.forEach(entry => {
                 const entryTime = new Date(entry.time);
-                const caffeineLevel = calculateCaffeineLevel(entryTime, entry.amount, currentTime);
-                totalCaffeine += caffeineLevel;
+                const level = this.caffeineManager.calculateCaffeineLevel(
+                    entryTime, entry.amount, currentTime);
+                totalCaffeine += level;
             });
 
-            // Stop plotting if caffeine level is negligible for 4 consecutive points (1 hour)
-            if (totalCaffeine < NEGLIGIBLE_CAFFEINE) {
-                consecutiveLowLevels++;
-                if (consecutiveLowLevels >= 4) {
-                    break;
-                }
+            if (totalCaffeine < CONFIG.CAFFEINE.NEGLIGIBLE) {
+                if (++consecutiveLowLevels >= 4) break;
             } else {
                 consecutiveLowLevels = 0;
             }
@@ -150,23 +308,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 minute: '2-digit',
                 hour12: true 
             }));
-
-            caffeineLevels.push(parseFloat(totalCaffeine.toFixed(2)));
+            levels.push(parseFloat(totalCaffeine.toFixed(2)));
             
-            if (totalCaffeine > personalCaffeineLimit) {
+            if (totalCaffeine > this.caffeineManager.personalLimit) {
                 exceedsThreshold = true;
             } else if (exceedsThreshold && !thresholdEndTime) {
                 thresholdEndTime = new Date(currentTime);
             }
             
-            maxCaffeineLevel = Math.max(maxCaffeineLevel, totalCaffeine);
+            maxLevel = Math.max(maxLevel, totalCaffeine);
             currentTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
         }
 
-        // Update warning display
-        if (maxCaffeineLevel > personalCaffeineLimit) {
-            caffeineWarning.style.display = 'block';
-            warningTimeElement.textContent = thresholdEndTime
+        return { timePoints, levels, maxLevel, thresholdEndTime };
+    }
+
+    updateWarningDisplay(maxLevel, thresholdEndTime) {
+        if (maxLevel > this.caffeineManager.personalLimit) {
+            this.elements.warning.style.display = 'block';
+            this.elements.warningTime.textContent = thresholdEndTime
                 ? `Level will be safe after ${thresholdEndTime.toLocaleTimeString([], {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -174,257 +334,158 @@ document.addEventListener('DOMContentLoaded', function() {
                 })}`
                 : "Level will remain high for the rest of the day";
         } else {
-            caffeineWarning.style.display = 'none';
+            this.elements.warning.style.display = 'none';
         }
+    }
 
-        // Create new chart with enhanced styling
-        currentChart = new Chart(chartCtx, {
+    createChart({ timePoints, levels, maxLevel }) {
+        const chartConfig = {
             type: 'line',
             data: {
                 labels: timePoints,
                 datasets: [{
                     label: 'Caffeine Level (mg)',
-                    data: caffeineLevels,
-                    borderColor: '#4CAF50',
-                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    data: levels,
+                    borderColor: CONFIG.CHART.COLORS.PRIMARY,
+                    backgroundColor: CONFIG.CHART.COLORS.BACKGROUND,
                     fill: true,
                     tension: 0.3,
                     borderWidth: 3,
                     pointRadius: 3,
                     pointHoverRadius: 6,
-                    pointBackgroundColor: '#4CAF50',
+                    pointBackgroundColor: CONFIG.CHART.COLORS.PRIMARY,
                     pointBorderColor: '#fff',
                     pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: '#4CAF50'
+                    pointHoverBorderColor: CONFIG.CHART.COLORS.PRIMARY
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                plugins: {
-                    legend: {
-                        labels: {
-                            font: {
-                                size: 14,
-                                family: "'Arial', sans-serif"
-                            }
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        titleFont: {
+            options: this.getChartOptions(maxLevel)
+        };
+
+        this.currentChart = new Chart(this.elements.chartCtx, chartConfig);
+    }
+
+    getChartOptions(maxLevel) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        font: {
                             size: 14,
                             family: "'Arial', sans-serif"
-                        },
-                        bodyFont: {
-                            size: 13,
-                            family: "'Arial', sans-serif"
-                        },
-                        padding: 12,
-                        displayColors: false,
-                        callbacks: {
-                            label: function(context) {
-                                return `Caffeine: ${context.parsed.y.toFixed(1)}mg`;
-                            }
                         }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: {
+                        size: 14,
+                        family: "'Arial', sans-serif"
                     },
-                    annotation: {
-                        annotations: {
-                            limit: {
-                                type: 'line',
-                                yMin: personalCaffeineLimit,
-                                yMax: personalCaffeineLimit,
-                                borderColor: '#ff5252',
-                                borderWidth: 2,
-                                borderDash: [5, 5],
-                                label: {
-                                    content: 'Daily Limit',
-                                    enabled: true,
-                                    position: 'end',
-                                    backgroundColor: '#ff5252',
-                                    font: {
-                                        size: 12,
-                                        family: "'Arial', sans-serif"
-                                    }
+                    bodyFont: {
+                        size: 13,
+                        family: "'Arial', sans-serif"
+                    },
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return `Caffeine: ${context.parsed.y.toFixed(1)}mg`;
+                        }
+                    }
+                },
+                annotation: {
+                    annotations: {
+                        limit: {
+                            type: 'line',
+                            yMin: this.caffeineManager.personalLimit,
+                            yMax: this.caffeineManager.personalLimit,
+                            borderColor: CONFIG.CHART.COLORS.WARNING,
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            label: {
+                                content: 'Daily Limit',
+                                enabled: true,
+                                position: 'end',
+                                backgroundColor: CONFIG.CHART.COLORS.WARNING,
+                                font: {
+                                    size: 12,
+                                    family: "'Arial', sans-serif"
                                 }
                             }
                         }
                     }
+                }
+            },
+            scales: this.getChartScales(maxLevel)
+        };
+    }
+
+    getChartScales(maxLevel) {
+        return {
+            x: {
+                display: true,
+                title: {
+                    display: true,
+                    text: 'Time',
+                    font: {
+                        size: 14,
+                        weight: 'bold',
+                        family: "'Arial', sans-serif"
+                    }
                 },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Time',
-                            font: {
-                                size: 14,
-                                weight: 'bold',
-                                family: "'Arial', sans-serif"
-                            }
-                        },
-                        grid: {
-                            display: true,
-                            color: 'rgba(0, 0, 0, 0.05)'
-                        },
-                        ticks: {
-                            font: {
-                                size: 12,
-                                family: "'Arial', sans-serif"
-                            },
-                            maxRotation: 45,
-                            minRotation: 45
-                        }
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                    font: {
+                        size: 12,
+                        family: "'Arial', sans-serif"
                     },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Caffeine (mg)',
-                            font: {
-                                size: 14,
-                                weight: 'bold',
-                                family: "'Arial', sans-serif"
-                            }
-                        },
-                        beginAtZero: true,
-                        suggestedMax: Math.max(personalCaffeineLimit * 1.2, maxCaffeineLevel * 1.1),
-                        grid: {
-                            display: true,
-                            color: 'rgba(0, 0, 0, 0.05)'
-                        },
-                        ticks: {
-                            font: {
-                                size: 12,
-                                family: "'Arial', sans-serif"
-                            }
-                        }
+                    maxRotation: 45,
+                    minRotation: 45
+                }
+            },
+            y: {
+                display: true,
+                title: {
+                    display: true,
+                    text: 'Caffeine (mg)',
+                    font: {
+                        size: 14,
+                        weight: 'bold',
+                        family: "'Arial', sans-serif"
+                    }
+                },
+                beginAtZero: true,
+                suggestedMax: Math.max(
+                    this.caffeineManager.personalLimit * 1.2, 
+                    maxLevel * 1.1
+                ),
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                    font: {
+                        size: 12,
+                        family: "'Arial', sans-serif"
                     }
                 }
             }
-        });
-    }
-
-    function displayEntries() {
-        entriesListElement.innerHTML = '';
-        caffeineEntries.sort((a, b) => new Date(b.time) - new Date(a.time)); // Sort newest first
-        
-        caffeineEntries.forEach((entry, index) => {
-            const listItem = document.createElement('li');
-            const entryTime = new Date(entry.time);
-            listItem.textContent = `${entryTime.toLocaleTimeString([], { 
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true
-            })} - ${entry.amount}mg`;
-            listItem.addEventListener('click', () => showEditForm(index));
-            entriesListElement.appendChild(listItem);
-        });
-    }
-
-    function showEditForm(index) {
-        const entry = caffeineEntries[index];
-        const entryDate = new Date(entry.time);
-        editTimeInput.value = `${entryDate.getHours().toString().padStart(2, '0')}:${entryDate.getMinutes().toString().padStart(2, '0')}`;
-        editAmountInput.value = entry.amount;
-        editIndexInput.value = index;
-        editFormElement.style.display = 'block';
-        deleteEntryButton.disabled = false;
-    }
-
-    document.getElementById('cancel-edit').addEventListener('click', () => {
-        editFormElement.style.display = 'none';
-        deleteEntryButton.disabled = true;
-    });
-
-    editFormElement.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const index = parseInt(editIndexInput.value, 10);
-        const timeValue = editTimeInput.value;
-        const amountValue = parseInt(editAmountInput.value, 10);
-
-        if (!timeValue || isNaN(amountValue) || amountValue <= 0) {
-            alert('Please enter valid time and amount.');
-            return;
-        }
-
-        const [hours, minutes] = timeValue.split(':').map(Number);
-        const entryTime = new Date();
-        entryTime.setHours(hours, minutes, 0, 0);
-
-        caffeineEntries[index] = {
-            time: entryTime.toISOString(),
-            amount: amountValue
         };
-
-        safeStorage.set('caffeineEntries', caffeineEntries);
-        editFormElement.reset();
-        editFormElement.style.display = 'none';
-        displayEntries();
-        updateChart();
-    });
-
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const timeValue = timeInput.value;
-        const amountValue = parseInt(amountInput.value, 10);
-
-        if (!timeValue || isNaN(amountValue) || amountValue <= 0) {
-            alert('Please enter valid time and amount.');
-            return;
-        }
-
-        const [hours, minutes] = timeValue.split(':').map(Number);
-        const entryTime = new Date();
-        entryTime.setHours(hours, minutes, 0, 0);
-
-        caffeineEntries.push({
-            time: entryTime.toISOString(),
-            amount: amountValue
-        });
-
-        safeStorage.set('caffeineEntries', caffeineEntries);
-        form.reset();
-        
-        // Set default time to current time
-        const now = new Date();
-        timeInput.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-        
-        updateChart();
-        displayEntries();
-    });
-
-    function clearAllEntries() {
-        if (confirm('Are you sure you want to clear all entries? This action cannot be undone.')) {
-            caffeineEntries = [];
-            safeStorage.set('caffeineEntries', caffeineEntries);
-            updateChart();
-            displayEntries();
-        }
     }
+}
 
-    clearEntriesButton.addEventListener('click', clearAllEntries);
-
-    function deleteEntry(index) {
-        if (confirm('Are you sure you want to delete this entry?')) {
-            caffeineEntries.splice(index, 1);
-            safeStorage.set('caffeineEntries', caffeineEntries);
-            editFormElement.style.display = 'none';
-            updateChart();
-            displayEntries();
-        }
-    }
-
-    deleteEntryButton.addEventListener('click', () => {
-        const index = parseInt(editIndexInput.value, 10);
-        deleteEntry(index);
-    });
-
-    // Register Service Worker with relative path
+// Service Worker Registration
+function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./service-worker.js')
@@ -436,12 +497,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
         });
     }
+}
 
-    // Set initial time input to current time
-    const now = new Date();
-    timeInput.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    // Initial display
-    updateChart();
-    displayEntries();
+// Initialize Application
+document.addEventListener('DOMContentLoaded', () => {
+    registerServiceWorker();
+    const caffeineManager = new CaffeineManager();
+    new UIManager(caffeineManager);
 });
