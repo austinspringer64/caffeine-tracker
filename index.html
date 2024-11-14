@@ -8,14 +8,6 @@
     <link rel="manifest" href="manifest.json">
     <!-- Add this line to reference the favicon -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
-    <style>
-        #caffeine-chart {
-            height: 300px !important;
-            width: 100% !important;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
@@ -45,7 +37,12 @@
         </form>
         <canvas id="caffeine-chart">Your browser does not support the canvas element.</canvas>
         
-        <form id="edit-form">
+        <h2>Entries</h2>
+        <ul id="entries-list"></ul>
+
+        <button id="clear-entries">Clear All Entries</button>
+
+        <form id="edit-form" style="display: none;">
             <h3>Edit Entry</h3>
             <input type="hidden" id="edit-index">
             <label for="edit-time">Time:</label>
@@ -56,16 +53,9 @@
             <button type="button" id="cancel-edit">Cancel</button>
             <button type="button" id="delete-entry">Delete Entry</button>
         </form>
-        
-        <div class="entries-container">
-            <h2>Entries</h2>
-            <ul id="entries-list"></ul>
-            <button id="clear-entries" class="danger-button">Clear All Entries</button>
-        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
