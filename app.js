@@ -288,7 +288,15 @@ class UIManager {
         let thresholdEndTime = null;
         let consecutiveLowLevels = 0;
 
+        const MAX_HOURS = 24; // Maximum hours to show on graph
+        const startTime = currentTime.getTime();
+
         while (currentTime <= lastEntryTime) {
+            // Add time limit check at start of loop
+            if ((currentTime.getTime() - startTime) > (MAX_HOURS * 60 * 60 * 1000)) {
+                break;
+            }
+
             let totalCaffeine = 0;
             sortedEntries.forEach(entry => {
                 const entryTime = new Date(entry.time);
@@ -297,8 +305,11 @@ class UIManager {
                 totalCaffeine += level;
             });
 
+            // Strengthen the early exit condition
             if (totalCaffeine < CONFIG.CAFFEINE.NEGLIGIBLE) {
-                if (++consecutiveLowLevels >= 4) break;
+                if (++consecutiveLowLevels >= 4) {
+                    if (timePoints.length > 0) break; // Only break if we have some points
+                }
             } else {
                 consecutiveLowLevels = 0;
             }
