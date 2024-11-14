@@ -256,16 +256,6 @@ class UIManager {
             });
     }
 
-    updateChart() {
-        if (this.currentChart) {
-            this.currentChart.destroy();
-        }
-
-        const chartData = this.prepareChartData();
-        this.updateWarningDisplay(chartData.maxLevel, chartData.thresholdEndTime);
-        this.createChart(chartData);
-    }
-
     prepareChartData() {
         if (this.caffeineManager.entries.length === 0) {
             return { timePoints: [], levels: [], maxLevel: 0 };
@@ -274,28 +264,22 @@ class UIManager {
         const sortedEntries = [...this.caffeineManager.entries]
             .sort((a, b) => new Date(a.time) - new Date(b.time));
 
+        const now = new Date();
         const firstEntryTime = new Date(sortedEntries[0].time);
-        const lastEntryTime = new Date();
-        lastEntryTime.setHours(23, 59, 59, 999);
-
+        // Only show last 24 hours
+        const startTime = new Date(Math.max(firstEntryTime, new Date(now - 24 * 60 * 60 * 1000)));
+        
         const timePoints = [];
         const levels = [];
-        let currentTime = new Date(firstEntryTime);
-        currentTime.setMinutes(Math.floor(currentTime.getMinutes() / 15) * 15, 0, 0);
+        let currentTime = new Date(startTime);
+        currentTime.setMinutes(Math.floor(currentTime.getMinutes() / 30) * 30, 0, 0); // Use 30-min intervals
 
         let maxLevel = 0;
-        let consecutiveLowLevels = 0;
 
-        // Set a fixed end time - either 24 hours from first entry or end of current day, whichever is sooner
-        const MAX_HOURS = 24;
-        const maxEndTime = new Date(firstEntryTime);
-        maxEndTime.setHours(maxEndTime.getHours() + MAX_HOURS);
-        const effectiveEndTime = new Date(Math.min(maxEndTime.getTime(), lastEntryTime.getTime()));
-
-        while (currentTime <= effectiveEndTime) {
+        // Calculate points until current time
+        while (currentTime <= now) {
             let totalCaffeine = 0;
             
-            // Only calculate for entries that could affect current time point
             for (const entry of sortedEntries) {
                 const entryTime = new Date(entry.time);
                 if (entryTime > currentTime) continue;
@@ -304,12 +288,7 @@ class UIManager {
                 totalCaffeine += level;
             }
 
-            if (totalCaffeine < CONFIG.CAFFEINE.NEGLIGIBLE) {
-                if (++consecutiveLowLevels >= 4 && timePoints.length > 0) {
-                    break;
-                }
-            } else {
-                consecutiveLowLevels = 0;
+            if (totalCaffeine >= CONFIG.CAFFEINE.NEGLIGIBLE) {
                 timePoints.push(currentTime.toLocaleTimeString([], { 
                     hour: '2-digit', 
                     minute: '2-digit',
@@ -319,11 +298,21 @@ class UIManager {
                 maxLevel = Math.max(maxLevel, totalCaffeine);
             }
 
-            // Increment by 15 minutes
-            currentTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+            // Increment by 30 minutes
+            currentTime = new Date(currentTime.getTime() + 30 * 60 * 1000);
         }
 
         return { timePoints, levels, maxLevel };
+    }
+
+    updateChart() {
+        if (this.currentChart) {
+            this.currentChart.destroy();
+        }
+
+        const chartData = this.prepareChartData();
+        this.updateWarningDisplay(chartData.maxLevel, chartData.thresholdEndTime);
+        this.createChart(chartData);
     }
 
     updateWarningDisplay(maxLevel, thresholdEndTime) {
@@ -352,17 +341,54 @@ class UIManager {
                     borderColor: CONFIG.CHART.COLORS.PRIMARY,
                     backgroundColor: CONFIG.CHART.COLORS.BACKGROUND,
                     fill: true,
-                    tension: 0.3,
-                    borderWidth: 3,
-                    pointRadius: 3,
-                    pointHoverRadius: 6,
-                    pointBackgroundColor: CONFIG.CHART.COLORS.PRIMARY,
-                    pointBorderColor: '#fff',
-                    pointHoverBackgroundColor: '#fff',
-                    pointHoverBorderColor: CONFIG.CHART.COLORS.PRIMARY
+                    tension: 0.2,
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
                 }]
             },
-            options: this.getChartOptions(maxLevel)
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                animation: false, // Disable animations
+                elements: {
+                    line: {
+                        tension: 0.2
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            limit: {
+                                type: 'line',
+                                yMin: this.caffeineManager.personalLimit,
+                                yMax: this.caffeineManager.personalLimit,
+                                borderColor: CONFIG.CHART.COLORS.WARNING,
+                                borderWidth: 1,
+                                borderDash: [5, 5]
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            maxRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 8
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: Math.max(this.caffeineManager.personalLimit, maxLevel) * 1.1,
+                        ticks: {
+                            maxTicksLimit: 6
+                        }
+                    }
+                }
+            }
         };
 
         this.currentChart = new Chart(this.elements.chartCtx, chartConfig);
