@@ -32,6 +32,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set the initial value of the input
     caffeineLimitInput.value = personalCaffeineLimit;
 
+    // Set default time to current time
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    timeInput.value = currentTime;
+
     // Function to save the personal limit
     function savePersonalLimit() {
         const newLimit = parseInt(caffeineLimitInput.value);
