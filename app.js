@@ -266,20 +266,17 @@ class UIManager {
 
         const now = new Date();
         const firstEntryTime = new Date(sortedEntries[0].time);
-        // Only show last 24 hours
         const startTime = new Date(Math.max(firstEntryTime, new Date(now - 24 * 60 * 60 * 1000)));
-        
+
         const timePoints = [];
         const levels = [];
         let currentTime = new Date(startTime);
-        currentTime.setMinutes(Math.floor(currentTime.getMinutes() / 30) * 30, 0, 0); // Use 30-min intervals
-
+        currentTime.setMinutes(Math.floor(currentTime.getMinutes() / 30) * 30, 0, 0);
         let maxLevel = 0;
+        let thresholdEndTime = null;
 
-        // Calculate points until current time
         while (currentTime <= now) {
             let totalCaffeine = 0;
-            
             for (const entry of sortedEntries) {
                 const entryTime = new Date(entry.time);
                 if (entryTime > currentTime) continue;
@@ -296,13 +293,16 @@ class UIManager {
                 }));
                 levels.push(totalCaffeine);
                 maxLevel = Math.max(maxLevel, totalCaffeine);
+
+                if (totalCaffeine > this.caffeineManager.personalLimit && !thresholdEndTime) {
+                    thresholdEndTime = new Date(currentTime);
+                }
             }
 
-            // Increment by 30 minutes
             currentTime = new Date(currentTime.getTime() + 30 * 60 * 1000);
         }
 
-        return { timePoints, levels, maxLevel };
+        return { timePoints, levels, maxLevel, thresholdEndTime };
     }
 
     updateChart() {
@@ -331,6 +331,13 @@ class UIManager {
     }
 
     createChart({ timePoints, levels, maxLevel }) {
+        if (!Chart.annotation) {
+            console.error('Chart.js annotation plugin not loaded');
+            return;
+        }
+
+        Chart.register(Chart.annotation);
+        
         const chartConfig = {
             type: 'line',
             data: {
@@ -343,21 +350,13 @@ class UIManager {
                     fill: true,
                     tension: 0.2,
                     borderWidth: 2,
-                    pointRadius: 2,
-                    pointHoverRadius: 4
+                    pointRadius: 2
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: true,
-                animation: false, // Disable animations
-                elements: {
-                    line: {
-                        tension: 0.2
-                    }
-                },
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: false },
                     annotation: {
                         annotations: {
                             limit: {
@@ -373,143 +372,23 @@ class UIManager {
                 },
                 scales: {
                     x: {
-                        grid: { display: false },
-                        ticks: {
-                            maxRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: 8
-                        }
+                        display: true,
+                        grid: { display: false }
                     },
                     y: {
+                        display: true,
                         beginAtZero: true,
-                        suggestedMax: Math.max(this.caffeineManager.personalLimit, maxLevel) * 1.1,
-                        ticks: {
-                            maxTicksLimit: 6
-                        }
+                        max: Math.max(this.caffeineManager.personalLimit, maxLevel) * 1.1
                     }
                 }
             }
         };
 
-        this.currentChart = new Chart(this.elements.chartCtx, chartConfig);
-    }
-
-    getChartOptions(maxLevel) {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            plugins: {
-                legend: {
-                    labels: {
-                        font: {
-                            size: 14,
-                            family: "'Arial', sans-serif"
-                        }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleFont: {
-                        size: 14,
-                        family: "'Arial', sans-serif"
-                    },
-                    bodyFont: {
-                        size: 13,
-                        family: "'Arial', sans-serif"
-                    },
-                    padding: 12,
-                    displayColors: false,
-                    callbacks: {
-                        label: function(context) {
-                            return `Caffeine: ${context.parsed.y.toFixed(1)}mg`;
-                        }
-                    }
-                },
-                annotation: {
-                    annotations: {
-                        limit: {
-                            type: 'line',
-                            yMin: this.caffeineManager.personalLimit,
-                            yMax: this.caffeineManager.personalLimit,
-                            borderColor: CONFIG.CHART.COLORS.WARNING,
-                            borderWidth: 2,
-                            borderDash: [5, 5],
-                            label: {
-                                content: 'Daily Limit',
-                                enabled: true,
-                                position: 'end',
-                                backgroundColor: CONFIG.CHART.COLORS.WARNING,
-                                font: {
-                                    size: 12,
-                                    family: "'Arial', sans-serif"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            scales: this.getChartScales(maxLevel)
-        };
-    }
-
-    getChartScales(maxLevel) {
-        return {
-            x: {
-                display: true,
-                title: {
-                    display: true,
-                    text: 'Time',
-                    font: {
-                        size: 14,
-                        weight: 'bold',
-                        family: "'Arial', sans-serif"
-                    }
-                },
-                grid: {
-                    display: true,
-                    color: 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                    font: {
-                        size: 12,
-                        family: "'Arial', sans-serif"
-                    },
-                    maxRotation: 45,
-                    minRotation: 45
-                }
-            },
-            y: {
-                display: true,
-                title: {
-                    display: true,
-                    text: 'Caffeine (mg)',
-                    font: {
-                        size: 14,
-                        weight: 'bold',
-                        family: "'Arial', sans-serif"
-                    }
-                },
-                beginAtZero: true,
-                suggestedMax: Math.max(
-                    this.caffeineManager.personalLimit * 1.2, 
-                    maxLevel * 1.1
-                ),
-                grid: {
-                    display: true,
-                    color: 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                    font: {
-                        size: 12,
-                        family: "'Arial', sans-serif"
-                    }
-                }
-            }
-        };
+        try {
+            this.currentChart = new Chart(this.elements.chartCtx, chartConfig);
+        } catch (error) {
+            console.error('Error creating chart:', error);
+        }
     }
 }
 
