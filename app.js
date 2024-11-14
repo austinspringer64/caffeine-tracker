@@ -284,54 +284,46 @@ class UIManager {
         currentTime.setMinutes(Math.floor(currentTime.getMinutes() / 15) * 15, 0, 0);
 
         let maxLevel = 0;
-        let exceedsThreshold = false;
-        let thresholdEndTime = null;
         let consecutiveLowLevels = 0;
 
-        const MAX_HOURS = 24; // Maximum hours to show on graph
-        const startTime = currentTime.getTime();
+        // Set a fixed end time - either 24 hours from first entry or end of current day, whichever is sooner
+        const MAX_HOURS = 24;
+        const maxEndTime = new Date(firstEntryTime);
+        maxEndTime.setHours(maxEndTime.getHours() + MAX_HOURS);
+        const effectiveEndTime = new Date(Math.min(maxEndTime.getTime(), lastEntryTime.getTime()));
 
-        while (currentTime <= lastEntryTime) {
-            // Add time limit check at start of loop
-            if ((currentTime.getTime() - startTime) > (MAX_HOURS * 60 * 60 * 1000)) {
-                break;
-            }
-
+        while (currentTime <= effectiveEndTime) {
             let totalCaffeine = 0;
-            sortedEntries.forEach(entry => {
+            
+            // Only calculate for entries that could affect current time point
+            for (const entry of sortedEntries) {
                 const entryTime = new Date(entry.time);
+                if (entryTime > currentTime) continue;
                 const level = this.caffeineManager.calculateCaffeineLevel(
                     entryTime, entry.amount, currentTime);
                 totalCaffeine += level;
-            });
+            }
 
-            // Strengthen the early exit condition
             if (totalCaffeine < CONFIG.CAFFEINE.NEGLIGIBLE) {
-                if (++consecutiveLowLevels >= 4) {
-                    if (timePoints.length > 0) break; // Only break if we have some points
+                if (++consecutiveLowLevels >= 4 && timePoints.length > 0) {
+                    break;
                 }
             } else {
                 consecutiveLowLevels = 0;
+                timePoints.push(currentTime.toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    hour12: true 
+                }));
+                levels.push(totalCaffeine);
+                maxLevel = Math.max(maxLevel, totalCaffeine);
             }
 
-            timePoints.push(currentTime.toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-            }));
-            levels.push(parseFloat(totalCaffeine.toFixed(2)));
-            
-            if (totalCaffeine > this.caffeineManager.personalLimit) {
-                exceedsThreshold = true;
-            } else if (exceedsThreshold && !thresholdEndTime) {
-                thresholdEndTime = new Date(currentTime);
-            }
-            
-            maxLevel = Math.max(maxLevel, totalCaffeine);
+            // Increment by 15 minutes
             currentTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
         }
 
-        return { timePoints, levels, maxLevel, thresholdEndTime };
+        return { timePoints, levels, maxLevel };
     }
 
     updateWarningDisplay(maxLevel, thresholdEndTime) {
