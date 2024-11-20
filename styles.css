@@ -66,7 +66,7 @@ canvas {
 #entries-list {
     list-style-type: none;
     padding: 0;
-    border: 1px solid red;
+    border: 1px solid #4c7ee2;
     min-height: 50px;
 }
 
@@ -115,7 +115,7 @@ canvas {
     font-size: 16px;
     margin-top: 20px;
     margin-bottom: 20px; /* Adds some space below the button */
-    border: 1px solid blue;
+    border: 1px solid #4c7ee2;
 }
 
 #clear-entries:hover {
@@ -146,11 +146,11 @@ canvas {
 }
 
 .warning {
-    background-color: #ffcccc;
-    color: #cc0000;
+    background-color: #cce5ff;
+    color: #004085;
     padding: 10px;
     margin-bottom: 15px;
-    border: 1px solid #cc0000;
+    border: 1px solid #b8daff;
     border-radius: 4px;
     text-align: center;
     font-weight: bold;
