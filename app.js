@@ -65,18 +65,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to calculate caffeine level at a specific time
     function calculateCaffeineLevel(entryTime, entryAmount, targetTime) {
         const timeDiff = (targetTime - entryTime) / (1000 * 60 * 60); // in hours
-        console.log(`Calculating level: Entry time: ${entryTime.toLocaleTimeString()}, Target time: ${targetTime.toLocaleTimeString()}, Time diff: ${timeDiff.toFixed(2)} hours`);
         if (timeDiff < 0) return 0;
         const level = entryAmount * Math.pow(0.5, timeDiff / CAFFEINE_HALF_LIFE);
-        console.log(`Calculated level: ${level.toFixed(2)}`);
         return level;
     }
 
     // Function to update the chart
     function updateChart() {
-        console.log('updateChart() called with entries:', caffeineEntries);
         if (caffeineEntries.length === 0) {
-            console.log('No entries to display in chart');
             chart.data.labels = [];
             chart.data.datasets[0].data = [];
             chart.update();
@@ -89,8 +85,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const firstEntryTime = new Date(caffeineEntries[0].time);
         const lastEntryTime = new Date();
         lastEntryTime.setHours(23, 59, 59, 999); // End of today
-
-        console.log('Time range:', firstEntryTime, 'to', lastEntryTime);
 
         // Generate time points every 15 minutes
         const timePoints = [];
@@ -136,13 +130,10 @@ document.addEventListener('DOMContentLoaded', function() {
             caffeineWarning.style.display = 'none';
         }
 
-        console.log('Final chart data:', { labels: timePoints, data: caffeineLevels });
-
         // Update Chart
         chart.data.labels = timePoints;
         chart.data.datasets[0].data = caffeineLevels;
         chart.update();
-        console.log('Chart updated');
     }
 
     // Initialize Chart

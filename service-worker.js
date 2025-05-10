@@ -4,11 +4,10 @@ const urlsToCache = [
     '/index.html',
     '/styles.css',
     '/app.js',
-    '/chart.js',
     '/manifest.json',
     '/icon-192x192.png',
-    '/icon-512x512.png'
-    // Add paths to icons if needed
+    '/icon-512x512.png',
+    '/offline.html'
 ];
 
 // Install Event

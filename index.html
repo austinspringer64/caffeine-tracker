@@ -10,14 +10,14 @@
     <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
-    <div class="container">
+    <div class="container" role="main">
         <h1>Caffeine Tracker</h1>
         
-        <!-- Add this new input field for personal limit -->
         <div class="limit-setting">
-            <label for="caffeine-limit">Personal Caffeine Limit (mg):</label>
-            <input type="number" id="caffeine-limit" min="0" value="250">
-            <button id="save-limit">Save Limit</button>
+            <label for="caffeine-limit" aria-label="Set your personal caffeine limit in milligrams">Personal Caffeine Limit (mg):</label>
+            <input type="number" id="caffeine-limit" min="0" value="250" aria-describedby="limit-description">
+            <span id="limit-description" class="sr-only">Enter your daily caffeine limit in milligrams</span>
+            <button id="save-limit" aria-label="Save caffeine limit">Save Limit</button>
         </div>
         
         <!-- Update the warning div -->
