@@ -153,29 +153,74 @@ document.addEventListener('DOMContentLoaded', function() {
             datasets: [{
                 label: 'Caffeine Level (mg)',
                 data: [],
-                borderColor: 'rgba(75, 192, 192, 1)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(59, 130, 246, 1)', // Vibrant blue
+                backgroundColor: 'rgba(59, 130, 246, 0.18)', // Light blue fill
                 fill: true,
-                tension: 0.1
+                tension: 0.3,
+                borderWidth: 4,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: 'rgba(59, 130, 246, 1)',
+                pointRadius: 6,
+                pointHoverRadius: 9,
+                shadowOffsetX: 0,
+                shadowOffsetY: 2,
+                shadowBlur: 8,
+                shadowColor: 'rgba(59,130,246,0.18)'
             }]
         },
         options: {
             responsive: true,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#1a1a1a',
+                        font: { weight: 'bold', size: 16 }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#fff',
+                    titleColor: '#222',
+                    bodyColor: '#222',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1
+                }
+            },
+            layout: {
+                padding: 16
+            },
             scales: {
                 x: {
                     display: true,
                     title: {
                         display: true,
-                        text: 'Time'
+                        text: 'Time',
+                        color: '#1a1a1a',
+                        font: { weight: 'bold', size: 15 }
+                    },
+                    ticks: {
+                        color: '#222',
+                        font: { size: 13 }
+                    },
+                    grid: {
+                        color: 'rgba(59,130,246,0.08)'
                     }
                 },
                 y: {
                     display: true,
                     title: {
                         display: true,
-                        text: 'Caffeine (mg)'
+                        text: 'Caffeine (mg)',
+                        color: '#1a1a1a',
+                        font: { weight: 'bold', size: 15 }
                     },
-                    beginAtZero: true
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#222',
+                        font: { size: 13 }
+                    },
+                    grid: {
+                        color: 'rgba(59,130,246,0.08)'
+                    }
                 }
             }
         }
