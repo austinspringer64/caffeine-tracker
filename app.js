@@ -76,6 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
             chart.data.labels = [];
             chart.data.datasets[0].data = [];
             chart.update();
+            caffeineWarning.style.display = 'none';
             return;
         }
 
