@@ -1,78 +1,456 @@
 // app.js
 
-// Wait for the DOM to be fully loaded before running the script
-document.addEventListener('DOMContentLoaded', function() {
-    // Constants
-    const CAFFEINE_HALF_LIFE = 5; // in hours
+document.addEventListener('DOMContentLoaded', function () {
+    // ===== Constants =====
+    const CAFFEINE_HALF_LIFE = 5; // hours
+    const CHART_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+    const MS_PER_HOUR = 1000 * 60 * 60;
+    const DEFAULT_CAFFEINE_LIMIT = 250; // mg
+    const HERO_UPDATE_INTERVAL_MS = 60 * 1000; // 1 minute
+    const SNACKBAR_TIMEOUT_MS = 5000; // 5 seconds
+    const TOAST_DURATION_MS = 3000; // 3 seconds
+    const STORAGE_KEYS = {
+        ENTRIES: 'caffeineEntries',
+        LIMIT: 'personalCaffeineLimit',
+    };
 
-    // Elements
+    const DRINK_PRESETS = [
+        { label: 'Coffee', emoji: '☕', amount: 95 },
+        { label: 'Espresso', emoji: '☕', amount: 63 },
+        { label: 'Red Bull', emoji: '⚡', amount: 80 },
+        { label: 'Tea', emoji: '🍵', amount: 47 },
+        { label: 'Coke', emoji: '🥤', amount: 34 },
+    ];
+    void DRINK_PRESETS; // Referenced in HTML button data-attributes
+
+    // ===== DOM Elements =====
     const form = document.getElementById('caffeine-form');
     const timeInput = document.getElementById('time');
     const amountInput = document.getElementById('amount');
-    const chartCtx = document.getElementById('caffeine-chart').getContext('2d');
     const entriesListElement = document.getElementById('entries-list');
     const editFormElement = document.getElementById('edit-form');
     const editTimeInput = document.getElementById('edit-time');
     const editAmountInput = document.getElementById('edit-amount');
     const editIndexInput = document.getElementById('edit-index');
-
-    // Add this near the top with other element selections
     const clearEntriesButton = document.getElementById('clear-entries');
     const deleteEntryButton = document.getElementById('delete-entry');
     const caffeineWarning = document.getElementById('caffeine-warning');
     const warningTimeElement = document.getElementById('warning-time');
-
-    // Add these new elements
     const caffeineLimitInput = document.getElementById('caffeine-limit');
     const saveLimitButton = document.getElementById('save-limit');
+    const dateFilterInput = document.getElementById('date-filter');
+    const datePrevBtn = document.getElementById('date-prev');
+    const dateNextBtn = document.getElementById('date-next');
+    const chartContainer = document.getElementById('chart-container');
+    const chartFallback = document.getElementById('chart-fallback');
+    const emptyState = document.getElementById('empty-state');
+    const nowBtn = document.getElementById('now-btn');
+    const toastContainer = document.getElementById('toast-container');
+    const snackbarContainer = document.getElementById('snackbar-container');
+    const heroCurrentLevel = document.getElementById('hero-current-level');
+    const heroPeak = document.getElementById('hero-peak');
+    const heroCount = document.getElementById('hero-count');
+    const budgetText = document.getElementById('budget-text');
+    const budgetBarFill = document.getElementById('budget-bar-fill');
+    const budgetRemaining = document.getElementById('budget-remaining');
 
-    // Add this variable to store the personal limit
-    let personalCaffeineLimit = parseInt(localStorage.getItem('personalCaffeineLimit')) || 250;
+    // ===== State =====
+    let personalCaffeineLimit = loadFromStorage(STORAGE_KEYS.LIMIT, DEFAULT_CAFFEINE_LIMIT);
+    let caffeineEntries = loadFromStorage(STORAGE_KEYS.ENTRIES, []);
+    let selectedDate = getTodayString();
+    let chart = null;
+    let chartInitialized = false;
+    let heroTimer = null;
+    let lastDeleted = null; // For undo
+    let snackbarTimer = null;
 
-    // Set the initial value of the input
+    // ===== Init =====
     caffeineLimitInput.value = personalCaffeineLimit;
+    dateFilterInput.value = selectedDate;
+    setTimeToNow(timeInput);
+    updateDateNavButtons();
 
-    // Set default time to current time
-    const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    timeInput.value = currentTime;
-
-    // Function to save the personal limit
-    function savePersonalLimit() {
-        const newLimit = parseInt(caffeineLimitInput.value);
-        if (!isNaN(newLimit) && newLimit > 0) {
-            personalCaffeineLimit = newLimit;
-            localStorage.setItem('personalCaffeineLimit', newLimit);
-            alert(`Personal caffeine limit set to ${newLimit}mg`);
-            updateChart(); // Update the chart to reflect the new limit
-        } else {
-            alert('Please enter a valid number greater than 0');
+    // --- LocalStorage helpers ---
+    function loadFromStorage(key, defaultValue) {
+        try {
+            const stored = localStorage.getItem(key);
+            if (stored === null) {
+                return defaultValue;
+            }
+            const parsed = JSON.parse(stored);
+            return parsed !== null && parsed !== undefined ? parsed : defaultValue;
+        } catch {
+            showToast('Error loading data', 'error');
+            return defaultValue;
         }
     }
 
-    // Add event listener for the save limit button
+    function saveToStorage(_key, value) {
+        try {
+            localStorage.setItem(_key, JSON.stringify(value));
+        } catch {
+            showToast('Error saving data', 'error');
+        }
+    }
+
+    function removeFromStorage(key) {
+        try {
+            localStorage.removeItem(key);
+        } catch {
+            showToast('Error clearing data', 'error');
+        }
+    }
+    void removeFromStorage; // Utility function, available for future use
+
+    // --- Date helpers ---
+    function getTodayString() {
+        const today = new Date();
+        return today.toISOString().split('T')[0];
+    }
+
+    function offsetDate(dateStr, days) {
+        const d = new Date(dateStr + 'T00:00:00');
+        d.setDate(d.getDate() + days);
+        return d.toISOString().split('T')[0];
+    }
+
+    function setTimeToNow(inputElement) {
+        const now = new Date();
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        inputElement.value = currentTime;
+    }
+
+    function getDateEntries(entries, dateStr) {
+        return entries.filter(entry => {
+            const entryDate = new Date(entry.time);
+            return entryDate.toISOString().split('T')[0] === dateStr;
+        });
+    }
+
+    // --- Core logic ---
+    function calculateCaffeineLevel(entryTime, entryAmount, targetTime) {
+        const timeDiff = (targetTime - entryTime) / MS_PER_HOUR;
+        if (timeDiff < 0) {
+            return 0;
+        }
+        return entryAmount * Math.pow(0.5, timeDiff / CAFFEINE_HALF_LIFE);
+    }
+
+    function getCurrentCaffeineLevel(dayEntries, targetTime) {
+        let total = 0;
+        dayEntries.forEach(entry => {
+            const entryTime = new Date(entry.time);
+            total += calculateCaffeineLevel(entryTime, entry.amount, targetTime);
+        });
+        return total;
+    }
+
+    // --- Toast System (replaces alert) ---
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
+
+        setTimeout(function () {
+            toast.classList.add('toast-exit');
+            toast.addEventListener('animationend', function () {
+                toast.remove();
+            });
+        }, TOAST_DURATION_MS);
+    }
+
+    // --- Snackbar System (Undo) ---
+    function showSnackbar(message, actionText, actionCallback) {
+        // Clear any existing snackbar
+        clearSnackbar();
+
+        const snackbar = document.createElement('div');
+        snackbar.className = 'snackbar';
+        snackbar.id = 'active-snackbar';
+        snackbar.innerHTML = `<span>${message}</span>`;
+
+        const actionBtn = document.createElement('button');
+        actionBtn.className = 'snackbar-action';
+        actionBtn.textContent = actionText;
+        actionBtn.addEventListener('click', function () {
+            actionCallback();
+            clearSnackbar();
+        });
+        snackbar.appendChild(actionBtn);
+
+        snackbarContainer.appendChild(snackbar);
+
+        snackbarTimer = setTimeout(function () {
+            clearSnackbar();
+        }, SNACKBAR_TIMEOUT_MS);
+    }
+
+    function clearSnackbar() {
+        if (snackbarTimer) {
+            clearTimeout(snackbarTimer);
+            snackbarTimer = null;
+        }
+        const existing = document.getElementById('active-snackbar');
+        if (existing) {
+            existing.classList.add('snackbar-exit');
+            existing.addEventListener('animationend', function () {
+                existing.remove();
+            });
+        }
+    }
+
+    // --- Date Navigation ---
+    function updateDateNavButtons() {
+        const today = getTodayString();
+        dateNextBtn.disabled = selectedDate === today;
+    }
+
+    datePrevBtn.addEventListener('click', function () {
+        clearSnackbar();
+        selectedDate = offsetDate(selectedDate, -1);
+        dateFilterInput.value = selectedDate;
+        displayEntries();
+        updateChart();
+        updateHeroStat();
+    });
+
+    dateNextBtn.addEventListener('click', function () {
+        clearSnackbar();
+        const today = getTodayString();
+        if (selectedDate !== today) {
+            selectedDate = offsetDate(selectedDate, 1);
+            dateFilterInput.value = selectedDate;
+            displayEntries();
+            updateChart();
+            updateHeroStat();
+            updateDateNavButtons();
+        }
+    });
+
+    dateFilterInput.addEventListener('change', function () {
+        clearSnackbar();
+        selectedDate = this.value;
+        displayEntries();
+        updateChart();
+        updateHeroStat();
+        updateDateNavButtons();
+    });
+
+    // --- "Now" Button ---
+    nowBtn.addEventListener('click', function () {
+        setTimeToNow(timeInput);
+    });
+
+    // --- Quick-Select Drinks ---
+    const drinkButtons = document.querySelectorAll('.btn-drink');
+    drinkButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const amount = parseInt(this.dataset.amount, 10);
+            amountInput.value = amount;
+            amountInput.focus();
+
+            // Visual feedback
+            drinkButtons.forEach(function (b) { b.classList.remove('active'); });
+            this.classList.add('active');
+        });
+    });
+
+    amountInput.addEventListener('input', function () {
+        drinkButtons.forEach(function (b) { b.classList.remove('active'); });
+    });
+
+    // --- Personal Limit ---
+    function savePersonalLimit() {
+        const newLimit = parseInt(caffeineLimitInput.value, 10);
+        if (!isNaN(newLimit) && newLimit > 0) {
+            personalCaffeineLimit = newLimit;
+            saveToStorage(STORAGE_KEYS.LIMIT, newLimit);
+            showToast('Limit saved ✓', 'success');
+            updateBudgetBar();
+            updateChart();
+            updateHeroStat();
+        } else {
+            showToast('Please enter a valid number greater than 0', 'error');
+        }
+    }
+
     saveLimitButton.addEventListener('click', savePersonalLimit);
 
-    // Data Storage (Using Local Storage)
-    let caffeineEntries = [];
-    try {
-        caffeineEntries = JSON.parse(localStorage.getItem('caffeineEntries')) || [];
-    } catch (error) {
-        console.error('Error loading caffeine entries:', error);
-        caffeineEntries = [];
+    // --- Budget Progress Bar ---
+    function updateBudgetBar() {
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        let totalCaffeine = 0;
+        dayEntries.forEach(function (entry) { totalCaffeine += entry.amount; });
+
+        const percentage = Math.min((totalCaffeine / personalCaffeineLimit) * 100, 100);
+        const remaining = personalCaffeineLimit - totalCaffeine;
+
+        budgetText.textContent = `${totalCaffeine} / ${personalCaffeineLimit} mg`;
+        budgetBarFill.style.width = `${percentage}%`;
+
+        // Color states
+        budgetBarFill.classList.remove('state-safe', 'state-caution', 'state-danger');
+        if (percentage >= 100) {
+            budgetBarFill.classList.add('state-danger');
+        } else if (percentage >= 70) {
+            budgetBarFill.classList.add('state-caution');
+        } else {
+            budgetBarFill.classList.add('state-safe');
+        }
+
+        if (remaining >= 0) {
+            budgetRemaining.textContent = `${remaining} mg remaining`;
+            budgetRemaining.classList.remove('over-limit');
+        } else {
+            budgetRemaining.textContent = `${Math.abs(remaining)} mg over limit!`;
+            budgetRemaining.classList.add('over-limit');
+        }
     }
 
-    // Function to calculate caffeine level at a specific time
-    function calculateCaffeineLevel(entryTime, entryAmount, targetTime) {
-        const timeDiff = (targetTime - entryTime) / (1000 * 60 * 60); // in hours
-        if (timeDiff < 0) return 0;
-        const level = entryAmount * Math.pow(0.5, timeDiff / CAFFEINE_HALF_LIFE);
-        return level;
+    // --- Hero Stat ---
+    function updateHeroStat() {
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        const now = new Date();
+
+        // Current level
+        const currentLevel = getCurrentCaffeineLevel(dayEntries, now);
+        heroCurrentLevel.textContent = `${currentLevel.toFixed(1)} mg`;
+
+        // Peak level
+        let peakLevel = 0;
+        if (dayEntries.length > 0) {
+            dayEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+            const firstEntryTime = new Date(dayEntries[0].time);
+            const lastTime = selectedDate === getTodayString() ? now : new Date(selectedDate + 'T23:59:59');
+
+            let t = new Date(firstEntryTime);
+            t.setMinutes(0, 0, 0);
+            while (t <= lastTime) {
+                const level = getCurrentCaffeineLevel(dayEntries, t);
+                if (level > peakLevel) {
+                    peakLevel = level;
+                }
+                t = new Date(t.getTime() + CHART_INTERVAL_MS);
+            }
+        }
+        heroPeak.textContent = `${peakLevel.toFixed(1)} mg`;
+
+        // Count
+        heroCount.textContent = dayEntries.length;
+
+        // Update budget bar too
+        updateBudgetBar();
     }
 
-    // Function to update the chart
+    // Start live hero updates
+    function startHeroTimer() {
+        if (heroTimer) {
+            clearInterval(heroTimer);
+        }
+        updateHeroStat();
+        heroTimer = setInterval(updateHeroStat, HERO_UPDATE_INTERVAL_MS);
+    }
+
+    // --- Chart ---
+    function initChart() {
+        if (typeof Chart === 'undefined') {
+            chartContainer.style.display = 'none';
+            chartFallback.style.display = 'block';
+            chartInitialized = false;
+            return;
+        }
+
+        const canvas = document.getElementById('caffeine-chart');
+        const ctx = canvas.getContext('2d');
+
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Caffeine Level (mg)',
+                    data: [],
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 4,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: 'rgba(59, 130, 246, 1)',
+                    pointRadius: 6,
+                    pointHoverRadius: 9,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#1a1a1a',
+                            font: { weight: 'bold', size: 16 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#fff',
+                        titleColor: '#222',
+                        bodyColor: '#222',
+                        borderColor: '#3b82f6',
+                        borderWidth: 1
+                    }
+                },
+                layout: {
+                    padding: 16
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Time',
+                            color: '#1a1a1a',
+                            font: { weight: 'bold', size: 15 }
+                        },
+                        ticks: {
+                            color: '#222',
+                            font: { size: 13 }
+                        },
+                        grid: {
+                            color: 'rgba(59,130,246,0.08)'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Caffeine (mg)',
+                            color: '#1a1a1a',
+                            font: { weight: 'bold', size: 15 }
+                        },
+                        beginAtZero: true,
+                        ticks: {
+                            color: '#222',
+                            font: { size: 13 }
+                        },
+                        grid: {
+                            color: 'rgba(59,130,246,0.08)'
+                        }
+                    }
+                }
+            }
+        });
+        chartInitialized = true;
+    }
+
     function updateChart() {
-        if (caffeineEntries.length === 0) {
+        if (!chartInitialized || !chart) {
+            renderFallbackSummary();
+            return;
+        }
+
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+
+        if (dayEntries.length === 0) {
             chart.data.labels = [];
             chart.data.datasets[0].data = [];
             chart.update();
@@ -80,19 +458,24 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Sort entries by time
-        caffeineEntries.sort((a, b) => new Date(a.time) - new Date(b.time));
+        dayEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
 
-        const firstEntryTime = new Date(caffeineEntries[0].time);
+        const firstEntryTime = new Date(dayEntries[0].time);
         const lastEntryTime = new Date();
-        lastEntryTime.setHours(23, 59, 59, 999); // End of today
 
-        // Generate time points every 15 minutes
+        if (selectedDate !== getTodayString()) {
+            lastEntryTime.setHours(23, 59, 59, 999);
+            const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+            firstEntryTime.setTime(selectedDateObj.getTime());
+        } else {
+            lastEntryTime.setHours(23, 59, 59, 999);
+        }
+
         const timePoints = [];
         const caffeineLevels = [];
 
         let currentTime = new Date(firstEntryTime);
-        currentTime.setMinutes(0, 0, 0); // Round to the nearest hour
+        currentTime.setMinutes(0, 0, 0);
 
         let maxCaffeineLevel = 0;
         let exceedsThreshold = false;
@@ -100,139 +483,85 @@ document.addEventListener('DOMContentLoaded', function() {
 
         while (currentTime <= lastEntryTime) {
             timePoints.push(currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            // Calculate total caffeine at currentTime
+
             let totalCaffeine = 0;
-            caffeineEntries.forEach(entry => {
+            dayEntries.forEach(function (entry) {
                 const entryTime = new Date(entry.time);
-                const caffeineLevel = calculateCaffeineLevel(entryTime, entry.amount, currentTime);
-                totalCaffeine += caffeineLevel;
+                totalCaffeine += calculateCaffeineLevel(entryTime, entry.amount, currentTime);
             });
-            caffeineLevels.push(totalCaffeine.toFixed(2));
-            
+            caffeineLevels.push(parseFloat(totalCaffeine.toFixed(2)));
+
             if (totalCaffeine > personalCaffeineLimit) {
                 exceedsThreshold = true;
             } else if (exceedsThreshold && !thresholdEndTime) {
                 thresholdEndTime = new Date(currentTime);
             }
-            
+
             maxCaffeineLevel = Math.max(maxCaffeineLevel, totalCaffeine);
-            currentTime = new Date(currentTime.getTime() + 15 * 60 * 1000);
+            currentTime = new Date(currentTime.getTime() + CHART_INTERVAL_MS);
         }
 
-        // Check if max caffeine level exceeds the personal limit and show/hide warning
         if (maxCaffeineLevel > personalCaffeineLimit) {
             caffeineWarning.style.display = 'block';
             if (thresholdEndTime) {
                 warningTimeElement.textContent = `Your amount is too high until ${thresholdEndTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
             } else {
-                warningTimeElement.textContent = "Your amount is too high for the rest of the day";
+                warningTimeElement.textContent = 'Your amount is too high for the rest of the day';
             }
         } else {
             caffeineWarning.style.display = 'none';
         }
 
-        // Update Chart
         chart.data.labels = timePoints;
         chart.data.datasets[0].data = caffeineLevels;
         chart.update();
     }
 
-    // Initialize Chart
-    const chart = new Chart(chartCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Caffeine Level (mg)',
-                data: [],
-                borderColor: 'rgba(59, 130, 246, 1)', // Vibrant blue
-                backgroundColor: 'rgba(59, 130, 246, 0.18)', // Light blue fill
-                fill: true,
-                tension: 0.3,
-                borderWidth: 4,
-                pointBackgroundColor: '#fff',
-                pointBorderColor: 'rgba(59, 130, 246, 1)',
-                pointRadius: 6,
-                pointHoverRadius: 9,
-                shadowOffsetX: 0,
-                shadowOffsetY: 2,
-                shadowBlur: 8,
-                shadowColor: 'rgba(59,130,246,0.18)'
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    labels: {
-                        color: '#1a1a1a',
-                        font: { weight: 'bold', size: 16 }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: '#fff',
-                    titleColor: '#222',
-                    bodyColor: '#222',
-                    borderColor: '#3b82f6',
-                    borderWidth: 1
-                }
-            },
-            layout: {
-                padding: 16
-            },
-            scales: {
-                x: {
-                    display: true,
-                    title: {
-                        display: true,
-                        text: 'Time',
-                        color: '#1a1a1a',
-                        font: { weight: 'bold', size: 15 }
-                    },
-                    ticks: {
-                        color: '#222',
-                        font: { size: 13 }
-                    },
-                    grid: {
-                        color: 'rgba(59,130,246,0.08)'
-                    }
-                },
-                y: {
-                    display: true,
-                    title: {
-                        display: true,
-                        text: 'Caffeine (mg)',
-                        color: '#1a1a1a',
-                        font: { weight: 'bold', size: 15 }
-                    },
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#222',
-                        font: { size: 13 }
-                    },
-                    grid: {
-                        color: 'rgba(59,130,246,0.08)'
-                    }
-                }
-            }
+    function renderFallbackSummary() {
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        if (dayEntries.length === 0) {
+            chartFallback.textContent = 'No entries for this date.';
+            return;
         }
-    });
-    console.log('Chart object:', chart);
 
-    // Add this new function to display entries
-    function displayEntries() {
-        console.log('Displaying entries:', caffeineEntries);
-        entriesListElement.innerHTML = '';
-        caffeineEntries.forEach((entry, index) => {
-            const listItem = document.createElement('li');
-            listItem.textContent = `${new Date(entry.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${entry.amount}mg`;
-            listItem.addEventListener('click', () => showEditForm(index));
-            entriesListElement.appendChild(listItem);
-        });
-        console.log('Entries list HTML:', entriesListElement.innerHTML);
+        let totalCaffeine = 0;
+        dayEntries.forEach(function (entry) { totalCaffeine += entry.amount; });
+
+        const exceedsLimit = totalCaffeine > personalCaffeineLimit;
+        chartFallback.innerHTML = `<strong>${selectedDate}</strong>: ${dayEntries.length} entries, ` +
+            `${totalCaffeine}mg total caffeine` +
+            (exceedsLimit ? ` <span style="color:#b45309">(exceeds ${personalCaffeineLimit}mg limit!)</span>` : '');
     }
 
-    // Update this function to show the edit form
+    // --- Display Entries ---
+    function displayEntries() {
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        dayEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+
+        entriesListElement.innerHTML = '';
+        dayEntries.forEach(function (entry) {
+            const actualIndex = caffeineEntries.indexOf(entry);
+            const listItem = document.createElement('li');
+            const entryDate = new Date(entry.time);
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'entry-time';
+            timeSpan.textContent = entryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const amountSpan = document.createElement('span');
+            amountSpan.className = 'entry-amount';
+            amountSpan.textContent = `${entry.amount} mg`;
+
+            listItem.appendChild(timeSpan);
+            listItem.appendChild(amountSpan);
+            listItem.addEventListener('click', function () { showEditForm(actualIndex); });
+            entriesListElement.appendChild(listItem);
+        });
+
+        emptyState.style.display = dayEntries.length === 0 ? 'block' : 'none';
+    }
+
+    // --- Edit Form ---
     function showEditForm(index) {
         const entry = caffeineEntries[index];
         const entryDate = new Date(entry.time);
@@ -240,29 +569,28 @@ document.addEventListener('DOMContentLoaded', function() {
         editAmountInput.value = entry.amount;
         editIndexInput.value = index;
         editFormElement.style.display = 'block';
-        deleteEntryButton.disabled = false; // Enable the delete button
+        deleteEntryButton.disabled = false;
+        editFormElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // Add this event listener for the cancel button
-    document.getElementById('cancel-edit').addEventListener('click', () => {
+    document.getElementById('cancel-edit').addEventListener('click', function () {
         editFormElement.style.display = 'none';
-        deleteEntryButton.disabled = true; // Disable the delete button when canceling
+        deleteEntryButton.disabled = true;
     });
 
-    // Update the edit form event listener
-    editFormElement.addEventListener('submit', (e) => {
+    editFormElement.addEventListener('submit', function (e) {
         e.preventDefault();
         const index = parseInt(editIndexInput.value, 10);
         const timeValue = editTimeInput.value;
         const amountValue = parseInt(editAmountInput.value, 10);
 
         if (!timeValue || isNaN(amountValue) || amountValue <= 0) {
-            alert('Please enter valid time and amount.');
+            showToast('Please enter valid time and amount', 'error');
             return;
         }
 
-        // Update the entry
-        const [hours, minutes] = timeValue.split(':').map(Number);
+        const hours = parseInt(timeValue.split(':')[0], 10);
+        const minutes = parseInt(timeValue.split(':')[1], 10);
         const entryTime = new Date(caffeineEntries[index].time);
         entryTime.setHours(hours, minutes, 0, 0);
 
@@ -271,99 +599,126 @@ document.addEventListener('DOMContentLoaded', function() {
             amount: amountValue
         };
 
-        // Save to Local Storage
-        localStorage.setItem('caffeineEntries', JSON.stringify(caffeineEntries));
-
-        // Reset form and hide it
+        saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
         editFormElement.reset();
         editFormElement.style.display = 'none';
-
-        // Update display and chart
         displayEntries();
         updateChart();
+        updateHeroStat();
+        showToast('Entry updated ✓', 'success');
     });
 
-    // Modify the existing form submission listener
-    form.addEventListener('submit', (e) => {
+    // --- Add Entry ---
+    form.addEventListener('submit', function (e) {
         e.preventDefault();
         const timeValue = timeInput.value;
         const amountValue = parseInt(amountInput.value, 10);
 
         if (!timeValue || isNaN(amountValue) || amountValue <= 0) {
-            alert('Please enter valid time and amount.');
+            showToast('Please enter valid time and amount', 'error');
             return;
         }
 
-        // Create Date object for the entry
-        const [hours, minutes] = timeValue.split(':').map(Number);
+        const hours = parseInt(timeValue.split(':')[0], 10);
+        const minutes = parseInt(timeValue.split(':')[1], 10);
         const entryTime = new Date();
+
+        if (selectedDate !== getTodayString()) {
+            const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+            entryTime.setTime(selectedDateObj.getTime());
+        }
+
         entryTime.setHours(hours, minutes, 0, 0);
 
-        // Add entry to the list
         caffeineEntries.push({
             time: entryTime.toISOString(),
             amount: amountValue
         });
 
-        console.log('New entry added:', { time: entryTime.toISOString(), amount: amountValue });
+        caffeineEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
 
-        // Save to Local Storage
-        localStorage.setItem('caffeineEntries', JSON.stringify(caffeineEntries));
-
-        // Reset form
+        saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
         form.reset();
-
-        // Update Chart
-        updateChart();
-
-        // Update the entries display
+        setTimeToNow(timeInput);
+        drinkButtons.forEach(function (b) { b.classList.remove('active'); });
         displayEntries();
+        updateChart();
+        updateHeroStat();
+        showToast('Entry added ✓', 'success');
     });
 
-    // Initialize from stored data
-    caffeineEntries = JSON.parse(localStorage.getItem('caffeineEntries')) || [];
-
-    // Initial Chart Update
-    updateChart();
-
-    // Display initial entries
-    displayEntries();
-
-    // Add this function to clear all entries
+    // --- Clear Entries (with undo) ---
     function clearAllEntries() {
-        if (confirm('Are you sure you want to clear all entries? This action cannot be undone.')) {
-            caffeineEntries = [];
-            localStorage.removeItem('caffeineEntries');
-            updateChart();
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+
+        // Store for undo
+        lastDeleted = {
+            type: 'all',
+            entries: dayEntries.map(function (e) { return Object.assign({}, e); }),
+        };
+
+        // Remove day entries
+        caffeineEntries = caffeineEntries.filter(function (entry) {
+            const entryDate = new Date(entry.time);
+            return entryDate.toISOString().split('T')[0] !== selectedDate;
+        });
+
+        saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
+        displayEntries();
+        updateChart();
+        updateHeroStat();
+
+        showSnackbar('All entries cleared', 'Undo', function () {
+            caffeineEntries = caffeineEntries.concat(lastDeleted.entries);
+            saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
             displayEntries();
-        }
+            updateChart();
+            updateHeroStat();
+            showToast('Entries restored', 'info');
+            lastDeleted = null;
+        });
     }
 
-    // Add this event listener for the clear entries button
     clearEntriesButton.addEventListener('click', clearAllEntries);
 
-    // Add this function to delete an entry
+    // --- Delete Entry (with undo) ---
     function deleteEntry(index) {
-        if (confirm('Are you sure you want to delete this entry?')) {
-            caffeineEntries.splice(index, 1);
-            localStorage.setItem('caffeineEntries', JSON.stringify(caffeineEntries));
-            editFormElement.style.display = 'none';
-            updateChart();
+        const entry = caffeineEntries[index];
+
+        // Store for undo
+        lastDeleted = {
+            type: 'single',
+            entry: Object.assign({}, entry),
+            index: index,
+        };
+
+        caffeineEntries.splice(index, 1);
+        saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
+        editFormElement.style.display = 'none';
+        displayEntries();
+        updateChart();
+        updateHeroStat();
+
+        showSnackbar('Entry deleted', 'Undo', function () {
+            caffeineEntries.splice(lastDeleted.index, 0, lastDeleted.entry);
+            caffeineEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+            saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
             displayEntries();
-        }
+            updateChart();
+            updateHeroStat();
+            showToast('Entry restored', 'info');
+            lastDeleted = null;
+        });
     }
 
-    // Add this event listener for the delete button
-    deleteEntryButton.addEventListener('click', () => {
+    deleteEntryButton.addEventListener('click', function () {
         const index = parseInt(editIndexInput.value, 10);
         deleteEntry(index);
     });
 
-    console.log('Entries list element:', entriesListElement);
-    console.log('Clear entries button:', clearEntriesButton);
-
-    console.log('Chart context:', chartCtx);
-
-    // Add this at the very bottom of app.js
-    console.log('app.js has finished loading');
+    // --- Boot ---
+    initChart();
+    displayEntries();
+    updateChart();
+    startHeroTimer();
 });

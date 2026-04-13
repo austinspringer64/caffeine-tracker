@@ -1,0 +1,13 @@
+{
+  "name": "caffeine-tracker",
+  "version": "1.0.0",
+  "description": "Track daily caffeine intake with visual charts",
+  "type": "module",
+  "main": "app.js",
+  "scripts": {
+    "start": "npx serve .",
+    "lint": "npx eslint app.js"
+  },
+  "keywords": ["caffeine", "tracker", "health"],
+  "license": "MIT"
+}
