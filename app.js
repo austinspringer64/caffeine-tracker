@@ -14,14 +14,17 @@ document.addEventListener('DOMContentLoaded', function () {
         LIMIT: 'personalCaffeineLimit',
     };
 
+    // eslint-disable-next-line no-unused-vars
     const DRINK_PRESETS = [
         { label: 'Coffee', emoji: '☕', amount: 95 },
         { label: 'Espresso', emoji: '☕', amount: 63 },
         { label: 'Red Bull', emoji: '⚡', amount: 80 },
+        { label: 'Monster', emoji: '🟢', amount: 160 },
+        { label: 'Ghost', emoji: '👻', amount: 200 },
         { label: 'Tea', emoji: '🍵', amount: 47 },
         { label: 'Coke', emoji: '🥤', amount: 34 },
+        { label: 'Mountain Dew', emoji: '🏔️', amount: 68 },
     ];
-    void DRINK_PRESETS; // Referenced in HTML button data-attributes
 
     // ===== DOM Elements =====
     const form = document.getElementById('caffeine-form');
@@ -93,6 +96,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // eslint-disable-next-line no-unused-vars
     function removeFromStorage(key) {
         try {
             localStorage.removeItem(key);
@@ -100,7 +104,6 @@ document.addEventListener('DOMContentLoaded', function () {
             showToast('Error clearing data', 'error');
         }
     }
-    void removeFromStorage; // Utility function, available for future use
 
     // --- Date helpers ---
     function getTodayString() {
@@ -124,6 +127,13 @@ document.addEventListener('DOMContentLoaded', function () {
         return entries.filter(entry => {
             const entryDate = new Date(entry.time);
             return entryDate.toISOString().split('T')[0] === dateStr;
+        });
+    }
+
+    function getCumulativeEntries(entries, dateStr) {
+        return entries.filter(entry => {
+            const entryDate = new Date(entry.time);
+            return entryDate.toISOString().split('T')[0] <= dateStr;
         });
     }
 
@@ -213,6 +223,7 @@ document.addEventListener('DOMContentLoaded', function () {
         displayEntries();
         updateChart();
         updateHeroStat();
+        updateDateNavButtons();
     });
 
     dateNextBtn.addEventListener('click', function () {
@@ -247,10 +258,11 @@ document.addEventListener('DOMContentLoaded', function () {
     drinkButtons.forEach(function (btn) {
         btn.addEventListener('click', function () {
             const amount = parseInt(this.dataset.amount, 10);
+            if (isNaN(amount) || amount <= 0) {
+                showToast('Invalid drink amount', 'error');
+                return;
+            }
             const drinkName = this.textContent.replace(/\d+mg/g, '').trim();
-
-            // Set time to now
-            setTimeToNow(timeInput);
 
             // Create entry directly
             const hours = parseInt(timeInput.value.split(':')[0], 10);
@@ -342,23 +354,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Hero Stat ---
     function updateHeroStat() {
         const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        const allEntries = getCumulativeEntries(caffeineEntries, selectedDate);
         const now = new Date();
 
-        // Current level
-        const currentLevel = getCurrentCaffeineLevel(dayEntries, now);
+        // Current level — include carryover from prior days
+        const currentLevel = getCurrentCaffeineLevel(allEntries, now);
         heroCurrentLevel.textContent = `${currentLevel.toFixed(1)} mg`;
 
-        // Peak level
+        // Peak level — include carryover from prior days
         let peakLevel = 0;
-        if (dayEntries.length > 0) {
-            dayEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
-            const firstEntryTime = new Date(dayEntries[0].time);
+        if (allEntries.length > 0) {
+            allEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+            const firstEntryTime = new Date(allEntries[0].time);
             const lastTime = selectedDate === getTodayString() ? now : new Date(selectedDate + 'T23:59:59');
 
             let t = new Date(firstEntryTime);
             t.setMinutes(0, 0, 0);
             while (t <= lastTime) {
-                const level = getCurrentCaffeineLevel(dayEntries, t);
+                const level = getCurrentCaffeineLevel(allEntries, t);
                 if (level > peakLevel) {
                     peakLevel = level;
                 }
@@ -367,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         heroPeak.textContent = `${peakLevel.toFixed(1)} mg`;
 
-        // Count
+        // Count — only today's entries
         heroCount.textContent = dayEntries.length;
 
         // Update budget bar too
@@ -391,6 +404,9 @@ document.addEventListener('DOMContentLoaded', function () {
             chartInitialized = false;
             return;
         }
+
+        chartContainer.style.display = 'block';
+        chartFallback.style.display = 'none';
 
         const canvas = document.getElementById('caffeine-chart');
         const ctx = canvas.getContext('2d');
@@ -479,9 +495,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        chartFallback.style.display = 'none';
 
-        if (dayEntries.length === 0) {
+        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
+        const allEntries = getCumulativeEntries(caffeineEntries, selectedDate);
+
+        if (allEntries.length === 0) {
             chart.data.labels = [];
             chart.data.datasets[0].data = [];
             chart.update();
@@ -491,13 +510,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         dayEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
 
-        const firstEntryTime = new Date(dayEntries[0].time);
+        // Chart always spans 00:00 → 23:59 of the selected day
+        const firstEntryTime = new Date(selectedDate + 'T00:00:00');
         const lastEntryTime = new Date();
 
         if (selectedDate !== getTodayString()) {
+            lastEntryTime.setTime(new Date(selectedDate + 'T00:00:00').getTime());
             lastEntryTime.setHours(23, 59, 59, 999);
-            const selectedDateObj = new Date(selectedDate + 'T00:00:00');
-            firstEntryTime.setTime(selectedDateObj.getTime());
         } else {
             lastEntryTime.setHours(23, 59, 59, 999);
         }
@@ -516,7 +535,7 @@ document.addEventListener('DOMContentLoaded', function () {
             timePoints.push(currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 
             let totalCaffeine = 0;
-            dayEntries.forEach(function (entry) {
+            allEntries.forEach(function (entry) {
                 const entryTime = new Date(entry.time);
                 totalCaffeine += calculateCaffeineLevel(entryTime, entry.amount, currentTime);
             });
@@ -575,6 +594,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const listItem = document.createElement('li');
             const entryDate = new Date(entry.time);
 
+            // Left side: time + amount
+            const leftDiv = document.createElement('div');
+            leftDiv.className = 'entry-left';
+
             const timeSpan = document.createElement('span');
             timeSpan.className = 'entry-time';
             timeSpan.textContent = entryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -583,9 +606,28 @@ document.addEventListener('DOMContentLoaded', function () {
             amountSpan.className = 'entry-amount';
             amountSpan.textContent = `${entry.amount} mg`;
 
-            listItem.appendChild(timeSpan);
-            listItem.appendChild(amountSpan);
-            listItem.addEventListener('click', function () { showEditForm(actualIndex); });
+            leftDiv.appendChild(timeSpan);
+            leftDiv.appendChild(amountSpan);
+            listItem.appendChild(leftDiv);
+
+            // Delete button (trash icon)
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'entry-delete';
+            deleteBtn.innerHTML = '&#128465;';
+            deleteBtn.title = 'Delete entry';
+            deleteBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                deleteEntry(actualIndex);
+            });
+            listItem.appendChild(deleteBtn);
+
+            // Click entry to edit
+            listItem.addEventListener('click', function (e) {
+                if (e.target !== deleteBtn) {
+                    showEditForm(actualIndex);
+                }
+            });
+
             entriesListElement.appendChild(listItem);
         });
 
@@ -593,6 +635,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Edit Form ---
+    const cancelEditBtn = document.getElementById('cancel-edit');
+
     function showEditForm(index) {
         const entry = caffeineEntries[index];
         const entryDate = new Date(entry.time);
@@ -601,11 +645,13 @@ document.addEventListener('DOMContentLoaded', function () {
         editIndexInput.value = index;
         editFormElement.style.display = 'block';
         deleteEntryButton.disabled = false;
+        cancelEditBtn.classList.add('pulsing');
         editFormElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    document.getElementById('cancel-edit').addEventListener('click', function () {
+    cancelEditBtn.addEventListener('click', function () {
         editFormElement.style.display = 'none';
+        cancelEditBtn.classList.remove('pulsing');
         deleteEntryButton.disabled = true;
     });
 
@@ -633,6 +679,7 @@ document.addEventListener('DOMContentLoaded', function () {
         saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
         editFormElement.reset();
         editFormElement.style.display = 'none';
+        cancelEditBtn.classList.remove('pulsing');
         displayEntries();
         updateChart();
         updateHeroStat();
@@ -716,23 +763,33 @@ document.addEventListener('DOMContentLoaded', function () {
     function deleteEntry(index) {
         const entry = caffeineEntries[index];
 
-        // Store for undo
+        // Store for undo — save time string instead of index to avoid stale references
         lastDeleted = {
             type: 'single',
             entry: Object.assign({}, entry),
-            index: index,
+            entryTime: entry.time,
         };
 
         caffeineEntries.splice(index, 1);
         saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
         editFormElement.style.display = 'none';
+        cancelEditBtn.classList.remove('pulsing');
         displayEntries();
         updateChart();
         updateHeroStat();
 
         showSnackbar('Entry deleted', 'Undo', function () {
-            caffeineEntries.splice(lastDeleted.index, 0, lastDeleted.entry);
-            caffeineEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+            // Find the correct sorted position by time
+            const restoredEntry = lastDeleted.entry;
+            let insertIndex = 0;
+            const restoredTime = new Date(restoredEntry.time).getTime();
+            for (let i = 0; i < caffeineEntries.length; i++) {
+                if (new Date(caffeineEntries[i].time).getTime() > restoredTime) {
+                    break;
+                }
+                insertIndex = i + 1;
+            }
+            caffeineEntries.splice(insertIndex, 0, restoredEntry);
             saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
             displayEntries();
             updateChart();

@@ -20,8 +20,25 @@ const MIME_TYPES = {
 const server = http.createServer((req, res) => {
     let filePath = path.join(__dirname, req.url.split('?')[0]);
 
+    try {
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end('Not found');
+            return;
+        }
+    } catch {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+    }
+
     if (fs.statSync(filePath).isDirectory()) {
         filePath = path.join(filePath, 'index.html');
+        if (!fs.existsSync(filePath)) {
+            res.writeHead(404);
+            res.end('Not found');
+            return;
+        }
     }
 
     const ext = path.extname(filePath).toLowerCase();
@@ -38,7 +55,7 @@ const server = http.createServer((req, res) => {
             'Expires': '0',
         });
         res.end(content);
-    } catch (err) {
+    } catch {
         res.writeHead(404);
         res.end('Not found');
     }

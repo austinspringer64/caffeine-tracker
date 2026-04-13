@@ -320,12 +320,15 @@ body {
 .settings-card {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 16px;
+    text-align: center;
 }
 
 .limit-setting {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 8px;
 }
 
@@ -498,6 +501,15 @@ button:active {
 
 .btn-secondary:hover {
     background: rgba(0, 0, 0, 0.14);
+}
+
+.btn-secondary.pulsing {
+    animation: pulseGray 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseGray {
+    0%, 100% { background: rgba(0, 0, 0, 0.08); transform: scale(1); }
+    50% { background: rgba(0, 0, 0, 0.2); transform: scale(1.03); }
 }
 
 .btn-danger {
@@ -698,6 +710,43 @@ button:active {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+}
+
+.entry-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.entry-delete {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--transition), transform var(--transition);
+    padding: 0;
+    line-height: 1;
+}
+
+#entries-list li:hover .entry-delete {
+    opacity: 1;
+}
+
+.entry-delete:hover {
+    transform: scale(1.15);
+    background: var(--danger-hover);
 }
 
 @keyframes entryFade {
@@ -753,7 +802,7 @@ button:active {
 /* ===== Three-Column Grid Layout ===== */
 .main-grid {
     display: grid;
-    grid-template-columns: 360px 300px 1fr;
+    grid-template-columns: 342px 285px 1fr;
     gap: 16px;
     align-items: start;
 }
