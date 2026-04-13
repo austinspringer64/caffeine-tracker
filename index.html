@@ -3,162 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Caffeine Tracker</title>
+    <link rel="stylesheet" href="styles.css?v=5">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Toast Container -->
     <div id="toast-container" aria-live="polite"></div>
-
-    <!-- Snackbar Container -->
     <div id="snackbar-container"></div>
 
     <div class="container" role="main">
         <h1 class="title">☕ Caffeine Tracker</h1>
 
-        <!-- Hero Stat: Current Level -->
-        <section class="card hero-card">
-            <div class="hero-stat">
-                <div class="hero-main">
-                    <span class="hero-label">Right now</span>
-                    <span class="hero-value" id="hero-current-level">— mg</span>
-                </div>
-                <div class="hero-details">
-                    <div class="hero-detail-item">
-                        <span class="hero-detail-label">Peak today</span>
-                        <span class="hero-detail-value" id="hero-peak">— mg</span>
+        <div class="main-grid">
+            <!-- Hero + Budget: span columns 1-2 -->
+            <section class="card hero-card">
+                <div class="hero-stat">
+                    <div class="hero-main">
+                        <span class="hero-label">Right now</span>
+                        <span class="hero-value" id="hero-current-level">— mg</span>
                     </div>
-                    <div class="hero-detail-item">
-                        <span class="hero-detail-label">Entries today</span>
-                        <span class="hero-detail-value" id="hero-count">0</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Budget Progress Bar -->
-        <section class="card budget-card">
-            <div class="budget-header">
-                <span class="budget-label">Daily budget</span>
-                <span class="budget-text" id="budget-text">0 / 250 mg</span>
-            </div>
-            <div class="budget-bar-track">
-                <div class="budget-bar-fill" id="budget-bar-fill" style="width: 0%"></div>
-            </div>
-            <p class="budget-remaining" id="budget-remaining">250 mg remaining</p>
-        </section>
-
-        <!-- Settings Card with Date Navigation -->
-        <section class="card settings-card">
-            <div class="limit-setting">
-                <label for="caffeine-limit">Daily Limit (mg)</label>
-                <div class="input-row">
-                    <input type="number" id="caffeine-limit" min="0" value="250" aria-describedby="limit-description">
-                    <button id="save-limit" aria-label="Save caffeine limit">Save</button>
-                </div>
-                <span id="limit-description" class="sr-only">Enter your daily caffeine limit in milligrams</span>
-            </div>
-
-            <div class="date-filter-row">
-                <button id="date-prev" class="btn-date-nav" aria-label="Previous day">‹</button>
-                <div class="date-filter">
-                    <label for="date-filter">Date</label>
-                    <input type="date" id="date-filter" aria-label="Filter entries by date">
-                </div>
-                <button id="date-next" class="btn-date-nav" aria-label="Next day">›</button>
-            </div>
-        </section>
-
-        <!-- Warning Banner -->
-        <div id="caffeine-warning" class="warning" style="display: none;">
-            <span class="warning-icon">⚠️</span>
-            <div class="warning-content">
-                <p class="warning-title">Caffeine level is too high!</p>
-                <p id="warning-time"></p>
-            </div>
-        </div>
-
-        <!-- Add Entry Form -->
-        <section class="card form-card">
-            <h2 class="section-title">Add Entry</h2>
-            <form id="caffeine-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="time">Time</label>
-                        <div class="input-with-action">
-                            <input type="time" id="time" value="08:00" required>
-                            <button type="button" id="now-btn" class="btn-now" title="Set to current time">Now</button>
+                    <div class="hero-details">
+                        <div class="hero-detail-item">
+                            <span class="hero-detail-label">Peak</span>
+                            <span class="hero-detail-value" id="hero-peak">— mg</span>
+                        </div>
+                        <div class="hero-detail-item">
+                            <span class="hero-detail-label">Entries</span>
+                            <span class="hero-detail-value" id="hero-count">0</span>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label for="amount">Amount (mg)</label>
-                        <input type="number" id="amount" min="0" placeholder="e.g. 95" required>
+                </div>
+            </section>
+
+            <section class="card budget-card">
+                <div class="budget-header">
+                    <span class="budget-label">Daily budget</span>
+                    <span class="budget-text" id="budget-text">0 / 250 mg</span>
+                </div>
+                <div class="budget-bar-track">
+                    <div class="budget-bar-fill" id="budget-bar-fill" style="width: 0%"></div>
+                </div>
+                <p class="budget-remaining" id="budget-remaining">250 mg remaining</p>
+            </section>
+
+            <!-- Col 1: Controls -->
+            <div class="col-controls">
+                <section class="card settings-card">
+                    <div class="limit-setting">
+                        <label for="caffeine-limit">Limit (mg)</label>
+                        <div class="input-row">
+                            <input type="number" id="caffeine-limit" min="0" value="250">
+                            <button id="save-limit">Save</button>
+                        </div>
+                        <span id="limit-description" class="sr-only">Enter your daily caffeine limit in milligrams</span>
+                    </div>
+                    <div class="date-filter-row">
+                        <button id="date-prev" class="btn-date-nav" aria-label="Previous day">‹</button>
+                        <div class="date-filter">
+                            <label for="date-filter">Date</label>
+                            <input type="date" id="date-filter" aria-label="Filter entries by date">
+                        </div>
+                        <button id="date-next" class="btn-date-nav" aria-label="Next day">›</button>
+                    </div>
+                </section>
+
+                <div id="caffeine-warning" class="warning" style="display: none;">
+                    <span class="warning-icon">⚠️</span>
+                    <div class="warning-content">
+                        <p class="warning-title">Caffeine level is too high!</p>
+                        <p id="warning-time"></p>
                     </div>
                 </div>
 
-                <!-- Quick-Select Drinks -->
-                <div class="quick-drinks">
-                    <span class="quick-drinks-label">Quick add:</span>
-                    <div class="quick-drinks-row">
-                        <button type="button" class="btn-drink" data-amount="95">☕ Coffee <span class="drink-mg">95mg</span></button>
-                        <button type="button" class="btn-drink" data-amount="63">☕ Espresso <span class="drink-mg">63mg</span></button>
-                        <button type="button" class="btn-drink" data-amount="80">⚡ Red Bull <span class="drink-mg">80mg</span></button>
-                        <button type="button" class="btn-drink" data-amount="160">🟢 Monster <span class="drink-mg">160mg</span></button>
-                        <button type="button" class="btn-drink" data-amount="200">👻 Ghost Energy <span class="drink-mg">200mg</span></button>
-                        <button type="button" class="btn-drink" data-amount="47">🍵 Tea <span class="drink-mg">47mg</span></button>
-                        <button type="button" class="btn-drink" data-amount="34">🥤 Coke <span class="drink-mg">34mg</span></button>
+                <section class="card form-card">
+                    <h2 class="section-title">Add Entry</h2>
+                    <form id="caffeine-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="time">Time</label>
+                                <div class="input-with-action">
+                                    <input type="time" id="time" value="08:00" required>
+                                    <button type="button" id="now-btn" class="btn-now" title="Set to current time">Now</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="amount">Amount (mg)</label>
+                                <input type="number" id="amount" min="0" placeholder="e.g. 95" required>
+                            </div>
+                        </div>
+                        <div class="quick-drinks">
+                            <span class="quick-drinks-label">Quick add:</span>
+                            <div class="quick-drinks-row">
+                                <button type="button" class="btn-drink" data-amount="95">☕ Coffee <span class="drink-mg">95</span></button>
+                                <button type="button" class="btn-drink" data-amount="63">☕ Espresso <span class="drink-mg">63</span></button>
+                                <button type="button" class="btn-drink" data-amount="80">⚡ Red Bull <span class="drink-mg">80</span></button>
+                                <button type="button" class="btn-drink" data-amount="160">🟢 Monster <span class="drink-mg">160</span></button>
+                                <button type="button" class="btn-drink" data-amount="200">👻 Ghost <span class="drink-mg">200</span></button>
+                                <button type="button" class="btn-drink" data-amount="47">🍵 Tea <span class="drink-mg">47</span></button>
+                                <button type="button" class="btn-drink" data-amount="34">🥤 Coke <span class="drink-mg">34</span></button>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">+ Add Entry</button>
+                    </form>
+                </section>
+            </div>
+
+            <!-- Col 2: Entries -->
+            <div class="col-entries">
+                <section class="card entries-card">
+                    <div class="entries-header">
+                        <h2 class="section-title">Entries</h2>
+                        <button id="clear-entries" class="btn btn-text">Clear</button>
                     </div>
-                </div>
+                    <ul id="entries-list"></ul>
+                    <p class="empty-state" id="empty-state" style="display: none;">No entries yet.</p>
 
-                <button type="submit" class="btn btn-primary btn-full">+ Add Entry</button>
-            </form>
-        </section>
+                    <form id="edit-form" class="edit-card" style="display: none;">
+                        <h2 class="section-title">Edit Entry</h2>
+                        <input type="hidden" id="edit-index">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-time">Time</label>
+                                <input type="time" id="edit-time" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-amount">Amount (mg)</label>
+                                <input type="number" id="edit-amount" min="0" required>
+                            </div>
+                        </div>
+                        <div class="edit-actions">
+                            <button type="submit" class="btn btn-primary">Update</button>
+                            <button type="button" id="cancel-edit" class="btn btn-secondary">Cancel</button>
+                            <button type="button" id="delete-entry" class="btn btn-danger" disabled>Delete</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
 
-        <!-- Chart Card -->
-        <section class="card chart-card">
-            <h2 class="section-title">Today's Overview</h2>
-            <div id="chart-container">
-                <canvas id="caffeine-chart">Your browser does not support the canvas element.</canvas>
+            <!-- Col 3: Chart -->
+            <div class="col-chart">
+                <section class="card chart-card">
+                    <h2 class="section-title">Overview</h2>
+                    <div id="chart-container">
+                        <canvas id="caffeine-chart">Your browser does not support the canvas element.</canvas>
+                    </div>
+                    <div id="chart-fallback" class="chart-fallback" style="display: none;" aria-live="polite"></div>
+                </section>
             </div>
-            <div id="chart-fallback" class="chart-fallback" style="display: none;" aria-live="polite"></div>
-        </section>
-
-        <!-- Entries Card -->
-        <section class="card entries-card">
-            <div class="entries-header">
-                <h2 class="section-title">Entries</h2>
-                <button id="clear-entries" class="btn btn-text">Clear All</button>
-            </div>
-            <ul id="entries-list"></ul>
-            <p class="empty-state" id="empty-state" style="display: none;">No entries for this date yet.</p>
-        </section>
-
-        <!-- Edit Form Card -->
-        <form id="edit-form" class="card edit-card" style="display: none;">
-            <h2 class="section-title">Edit Entry</h2>
-            <input type="hidden" id="edit-index">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="edit-time">Time</label>
-                    <input type="time" id="edit-time" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-amount">Amount (mg)</label>
-                    <input type="number" id="edit-amount" min="0" required>
-                </div>
-            </div>
-            <div class="edit-actions">
-                <button type="submit" class="btn btn-primary">Update</button>
-                <button type="button" id="cancel-edit" class="btn btn-secondary">Cancel</button>
-                <button type="button" id="delete-entry" class="btn btn-danger" disabled>Delete</button>
-            </div>
-        </form>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

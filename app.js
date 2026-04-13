@@ -247,12 +247,43 @@ document.addEventListener('DOMContentLoaded', function () {
     drinkButtons.forEach(function (btn) {
         btn.addEventListener('click', function () {
             const amount = parseInt(this.dataset.amount, 10);
-            amountInput.value = amount;
-            amountInput.focus();
+            const drinkName = this.textContent.replace(/\d+mg/g, '').trim();
 
-            // Visual feedback
+            // Set time to now
+            setTimeToNow(timeInput);
+
+            // Create entry directly
+            const hours = parseInt(timeInput.value.split(':')[0], 10);
+            const minutes = parseInt(timeInput.value.split(':')[1], 10);
+            const entryTime = new Date();
+
+            if (selectedDate !== getTodayString()) {
+                const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+                entryTime.setTime(selectedDateObj.getTime());
+            }
+
+            entryTime.setHours(hours, minutes, 0, 0);
+
+            caffeineEntries.push({
+                time: entryTime.toISOString(),
+                amount: amount
+            });
+
+            caffeineEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+
+            saveToStorage(STORAGE_KEYS.ENTRIES, caffeineEntries);
+            displayEntries();
+            updateChart();
+            updateHeroStat();
+
+            // Visual feedback — brief flash on the button
             drinkButtons.forEach(function (b) { b.classList.remove('active'); });
             this.classList.add('active');
+            setTimeout(function () {
+                this.classList.remove('active');
+            }.bind(this), 600);
+
+            showToast(`${drinkName} added (${amount}mg)`, 'success');
         });
     });
 
