@@ -3,7 +3,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     // ===== Constants =====
     const CAFFEINE_HALF_LIFE = 5; // hours
-    const CHART_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+    const CHART_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
     const MS_PER_HOUR = 1000 * 60 * 60;
     const DEFAULT_CAFFEINE_LIMIT = 250; // mg
     const HERO_UPDATE_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const dateFilterInput = document.getElementById('date-filter');
     const datePrevBtn = document.getElementById('date-prev');
     const dateNextBtn = document.getElementById('date-next');
+    const dateBadge = document.getElementById('date-badge');
     const chartContainer = document.getElementById('chart-container');
     const chartFallback = document.getElementById('chart-fallback');
     const emptyState = document.getElementById('empty-state');
@@ -72,6 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
     dateFilterInput.value = selectedDate;
     setTimeToNow(timeInput);
     updateDateNavButtons();
+    updateDateBadge();
 
     // --- LocalStorage helpers ---
     function loadFromStorage(key, defaultValue) {
@@ -172,8 +174,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Snackbar System (Undo) ---
     function showSnackbar(message, actionText, actionCallback) {
-        // Clear any existing snackbar
-        clearSnackbar();
+        // Immediately remove any existing snackbar
+        if (snackbarTimer) {
+            clearTimeout(snackbarTimer);
+            snackbarTimer = null;
+        }
+        const existing = document.getElementById('active-snackbar');
+        if (existing) {
+            existing.remove();
+        }
 
         const snackbar = document.createElement('div');
         snackbar.className = 'snackbar';
@@ -203,10 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const existing = document.getElementById('active-snackbar');
         if (existing) {
-            existing.classList.add('snackbar-exit');
-            existing.addEventListener('animationend', function () {
-                existing.remove();
-            });
+            existing.remove();
         }
     }
 
@@ -214,6 +220,21 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateDateNavButtons() {
         const today = getTodayString();
         dateNextBtn.disabled = selectedDate === today;
+    }
+
+    function updateDateBadge() {
+        const today = getTodayString();
+        if (selectedDate !== today) {
+            const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric'
+            });
+            dateBadge.textContent = `Viewing ${dateLabel}`;
+            dateBadge.style.display = 'block';
+        } else {
+            dateBadge.style.display = 'none';
+        }
     }
 
     datePrevBtn.addEventListener('click', function () {
@@ -224,6 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateChart();
         updateHeroStat();
         updateDateNavButtons();
+        updateDateBadge();
     });
 
     dateNextBtn.addEventListener('click', function () {
@@ -236,6 +258,7 @@ document.addEventListener('DOMContentLoaded', function () {
             updateChart();
             updateHeroStat();
             updateDateNavButtons();
+            updateDateBadge();
         }
     });
 
@@ -246,6 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateChart();
         updateHeroStat();
         updateDateNavButtons();
+        updateDateBadge();
     });
 
     // --- "Now" Button ---
@@ -256,7 +280,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Quick-Select Drinks ---
     const drinkButtons = document.querySelectorAll('.btn-drink');
     drinkButtons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
             const amount = parseInt(this.dataset.amount, 10);
             if (isNaN(amount) || amount <= 0) {
                 showToast('Invalid drink amount', 'error');
@@ -264,9 +291,20 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             const drinkName = this.textContent.replace(/\d+mg/g, '').trim();
 
-            // Create entry directly
-            const hours = parseInt(timeInput.value.split(':')[0], 10);
-            const minutes = parseInt(timeInput.value.split(':')[1], 10);
+            // Create entry directly — fall back to current time if input is empty
+            const timeVal = timeInput.value || '';
+            const timeParts = timeVal.split(':');
+            const hours = parseInt(timeParts[0], 10);
+            const minutes = parseInt(timeParts[1], 10);
+
+            let finalHours = hours;
+            let finalMinutes = minutes;
+            if (isNaN(finalHours) || isNaN(finalMinutes)) {
+                const now = new Date();
+                finalHours = now.getHours();
+                finalMinutes = now.getMinutes();
+            }
+
             const entryTime = new Date();
 
             if (selectedDate !== getTodayString()) {
@@ -274,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 entryTime.setTime(selectedDateObj.getTime());
             }
 
-            entryTime.setHours(hours, minutes, 0, 0);
+            entryTime.setHours(finalHours, finalMinutes, 0, 0);
 
             caffeineEntries.push({
                 time: entryTime.toISOString(),
@@ -296,6 +334,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }.bind(this), 600);
 
             showToast(`${drinkName} added (${amount}mg)`, 'success');
+            if (selectedDate !== getTodayString()) {
+                const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                showToast(`Added to ${dateLabel}`, 'info');
+            }
         });
     });
 
@@ -361,16 +403,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const currentLevel = getCurrentCaffeineLevel(allEntries, now);
         heroCurrentLevel.textContent = `${currentLevel.toFixed(1)} mg`;
 
-        // Peak level — include carryover from prior days
+        // Peak level — scan only within selected day window
         let peakLevel = 0;
         if (allEntries.length > 0) {
-            allEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
-            const firstEntryTime = new Date(allEntries[0].time);
-            const lastTime = selectedDate === getTodayString() ? now : new Date(selectedDate + 'T23:59:59');
+            const dayStart = new Date(selectedDate + 'T00:00:00');
+            const dayEnd = selectedDate === getTodayString() ? now : new Date(selectedDate + 'T23:59:59');
 
-            let t = new Date(firstEntryTime);
-            t.setMinutes(0, 0, 0);
-            while (t <= lastTime) {
+            let t = new Date(dayStart);
+            while (t <= dayEnd) {
                 const level = getCurrentCaffeineLevel(allEntries, t);
                 if (level > peakLevel) {
                     peakLevel = level;
@@ -585,14 +625,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Display Entries ---
     function displayEntries() {
-        const dayEntries = getDateEntries(caffeineEntries, selectedDate);
-        dayEntries.sort(function (a, b) { return new Date(a.time) - new Date(b.time); });
+        // Build indexed list directly to avoid stale indexOf bugs
+        const dayEntries = [];
+        caffeineEntries.forEach(function (entry, index) {
+            const entryDate = new Date(entry.time);
+            if (entryDate.toISOString().split('T')[0] === selectedDate) {
+                dayEntries.push({ index: index, entry: entry });
+            }
+        });
+        dayEntries.sort(function (a, b) { return new Date(a.entry.time) - new Date(b.entry.time); });
 
         entriesListElement.innerHTML = '';
-        dayEntries.forEach(function (entry) {
-            const actualIndex = caffeineEntries.indexOf(entry);
-            const listItem = document.createElement('li');
+        dayEntries.forEach(function (item) {
+            const actualIndex = item.index;
+            const entry = item.entry;
             const entryDate = new Date(entry.time);
+
+            const listItem = document.createElement('li');
 
             // Left side: time + amount
             const leftDiv = document.createElement('div');

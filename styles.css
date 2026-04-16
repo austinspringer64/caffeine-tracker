@@ -355,6 +355,20 @@ body {
     gap: 8px;
 }
 
+/* ===== Date Badge ===== */
+.date-badge {
+    display: none;
+    background: var(--accent-subtle);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    text-align: center;
+    margin-bottom: 12px;
+    letter-spacing: 0.3px;
+}
+
 /* ===== Date Navigation Buttons ===== */
 .btn-date-nav {
     width: 40px;
